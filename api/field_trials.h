@@ -15,7 +15,7 @@
 #include <string>
 
 #include "absl/strings/string_view.h"
-#include "api/field_trials_registry.h"
+#include "api/field_trials_view.h"
 #include "rtc_base/containers/flat_map.h"
 
 namespace webrtc {
@@ -34,7 +34,7 @@ namespace webrtc {
 // NOTE: Creating multiple FieldTrials-object is currently prohibited
 // until we remove the global string (TODO(bugs.webrtc.org/10335))
 // (unless using CreateNoGlobal):
-class FieldTrials : public FieldTrialsRegistry {
+class FieldTrials : public FieldTrialsView {
  public:
   explicit FieldTrials(const std::string& s);
   ~FieldTrials();
@@ -43,11 +43,10 @@ class FieldTrials : public FieldTrialsRegistry {
   // global variable (i.e can not be used for all parts of webrtc).
   static std::unique_ptr<FieldTrials> CreateNoGlobal(const std::string& s);
 
+  std::string Lookup(absl::string_view key) const override;
+
  private:
   explicit FieldTrials(const std::string& s, bool);
-
-  std::string GetValue(absl::string_view key) const override;
-
   const bool uses_global_;
   const std::string field_trial_string_;
   const char* const previous_field_trial_string_;

@@ -43,8 +43,6 @@ static const SocketAddress kRemoteAddr("22.22.22.22", 0);
 static const SocketAddress kRemoteIPv6Addr("2401:fa00:4:1000:be30:5bff:fee5:c4",
                                            0);
 
-constexpr uint64_t kTiebreakerDefault = 44444;
-
 class ConnectionObserver : public sigslot::has_slots<> {
  public:
   explicit ConnectionObserver(Connection* conn) : conn_(conn) {
@@ -83,19 +81,15 @@ class TCPPortTest : public ::testing::Test, public sigslot::has_slots<> {
   }
 
   std::unique_ptr<TCPPort> CreateTCPPort(const SocketAddress& addr) {
-    auto port = std::unique_ptr<TCPPort>(
+    return std::unique_ptr<TCPPort>(
         TCPPort::Create(&main_, &socket_factory_, MakeNetwork(addr), 0, 0,
                         username_, password_, true, &field_trials_));
-    port->SetIceTiebreaker(kTiebreakerDefault);
-    return port;
   }
 
   std::unique_ptr<TCPPort> CreateTCPPort(const rtc::Network* network) {
-    auto port = std::unique_ptr<TCPPort>(
+    return std::unique_ptr<TCPPort>(
         TCPPort::Create(&main_, &socket_factory_, network, 0, 0, username_,
                         password_, true, &field_trials_));
-    port->SetIceTiebreaker(kTiebreakerDefault);
-    return port;
   }
 
  protected:

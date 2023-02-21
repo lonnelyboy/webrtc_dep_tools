@@ -46,6 +46,10 @@
 #include "rtc_base/thread.h"
 #include "rtc_base/thread_annotations.h"
 
+namespace cricket {
+class ChannelManager;
+}
+
 namespace rtc {
 class BasicNetworkManager;
 class BasicPacketSocketFactory;
@@ -136,10 +140,8 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface {
   bool IsTrialEnabled(absl::string_view key) const;
 
   std::unique_ptr<RtcEventLog> CreateRtcEventLog_w();
-  std::unique_ptr<Call> CreateCall_w(
-      RtcEventLog* event_log,
-      const FieldTrialsView& field_trials,
-      const PeerConnectionInterface::RTCConfiguration& configuration);
+  std::unique_ptr<Call> CreateCall_w(RtcEventLog* event_log,
+                                     const FieldTrialsView& field_trials);
 
   rtc::scoped_refptr<ConnectionContext> context_;
   PeerConnectionFactoryInterface::Options options_
@@ -154,7 +156,7 @@ class PeerConnectionFactory : public PeerConnectionFactoryInterface {
   std::unique_ptr<NetEqFactory> neteq_factory_;
   const std::unique_ptr<RtpTransportControllerSendFactoryInterface>
       transport_controller_send_factory_;
-  std::unique_ptr<Metronome> metronome_ RTC_GUARDED_BY(worker_thread());
+  std::unique_ptr<Metronome> metronome_;
 };
 
 }  // namespace webrtc

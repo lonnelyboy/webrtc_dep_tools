@@ -171,24 +171,29 @@ void RemoveSsrcsAndMsids(cricket::SessionDescription* desc);
 // endpoint that only signals a=msid lines to convey stream_ids.
 void RemoveSsrcsAndKeepMsids(cricket::SessionDescription* desc);
 
+// TODO(https://crbug.com/webrtc/14175): Stop depending on "track" stats, the
+// metrics we're interested in are already available in "inbound-rtp".
 int FindFirstMediaStatsIndexByKind(
     const std::string& kind,
-    const std::vector<const webrtc::RTCInboundRTPStreamStats*>& inbound_rtps);
+    const std::vector<const webrtc::RTCMediaStreamTrackStats*>&
+        media_stats_vec);
 
 class TaskQueueMetronome : public webrtc::Metronome {
  public:
-  explicit TaskQueueMetronome(TimeDelta tick_period);
+  TaskQueueMetronome(TaskQueueFactory* factory, TimeDelta tick_period);
   ~TaskQueueMetronome() override;
 
   // webrtc::Metronome implementation.
-  void RequestCallOnNextTick(absl::AnyInvocable<void() &&> callback) override;
+  void AddListener(TickListener* listener) override;
+  void RemoveListener(TickListener* listener) override;
   TimeDelta TickPeriod() const override;
 
  private:
+  Mutex mutex_;
   const TimeDelta tick_period_;
-  SequenceChecker sequence_checker_;
-  std::vector<absl::AnyInvocable<void() &&>> callbacks_;
-  ScopedTaskSafetyDetached safety_;
+  std::set<TickListener*> listeners_ RTC_GUARDED_BY(mutex_);
+  RepeatingTaskHandle tick_task_;
+  rtc::TaskQueue queue_;
 };
 
 class SignalingMessageReceiver {
@@ -770,8 +775,8 @@ class PeerConnectionIntegrationWrapper : public webrtc::PeerConnectionObserver,
     pc_factory_dependencies.task_queue_factory =
         webrtc::CreateDefaultTaskQueueFactory();
     pc_factory_dependencies.trials = std::make_unique<FieldTrialBasedConfig>();
-    pc_factory_dependencies.metronome =
-        std::make_unique<TaskQueueMetronome>(TimeDelta::Millis(8));
+    pc_factory_dependencies.metronome = std::make_unique<TaskQueueMetronome>(
+        pc_factory_dependencies.task_queue_factory.get(), TimeDelta::Millis(8));
     cricket::MediaEngineDependencies media_deps;
     media_deps.task_queue_factory =
         pc_factory_dependencies.task_queue_factory.get();

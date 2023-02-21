@@ -550,7 +550,7 @@ TEST(AudioSendStreamTest, SendCodecAppliesAudioNetworkAdaptor) {
     auto stream_config = helper.config();
     stream_config.audio_network_adaptor_config = kAnaReconfigString;
 
-    send_stream->Reconfigure(stream_config, nullptr);
+    send_stream->Reconfigure(stream_config);
   }
 }
 
@@ -590,7 +590,7 @@ TEST(AudioSendStreamTest, AudioNetworkAdaptorReceivesOverhead) {
     auto stream_config = helper.config();
     stream_config.audio_network_adaptor_config = kAnaConfigString;
 
-    send_stream->Reconfigure(stream_config, nullptr);
+    send_stream->Reconfigure(stream_config);
   }
 }
 
@@ -791,7 +791,7 @@ TEST(AudioSendStreamTest, DontRecreateEncoder) {
         AudioSendStream::Config::SendCodecSpec(9, kG722Format);
     helper.config().send_codec_spec->cng_payload_type = 105;
     auto send_stream = helper.CreateAudioSendStream();
-    send_stream->Reconfigure(helper.config(), nullptr);
+    send_stream->Reconfigure(helper.config());
   }
 }
 
@@ -816,7 +816,7 @@ TEST(AudioSendStreamTest, ReconfigureTransportCcResetsFirst) {
           .Times(1);
     }
 
-    send_stream->Reconfigure(new_config, nullptr);
+    send_stream->Reconfigure(new_config);
   }
 }
 
@@ -928,11 +928,11 @@ TEST(AudioSendStreamTest, ReconfigureWithFrameEncryptor) {
     new_config.frame_encryptor = mock_frame_encryptor_0;
     EXPECT_CALL(*helper.channel_send(), SetFrameEncryptor(Ne(nullptr)))
         .Times(1);
-    send_stream->Reconfigure(new_config, nullptr);
+    send_stream->Reconfigure(new_config);
 
     // Not updating the frame encryptor shouldn't force it to reconfigure.
     EXPECT_CALL(*helper.channel_send(), SetFrameEncryptor(_)).Times(0);
-    send_stream->Reconfigure(new_config, nullptr);
+    send_stream->Reconfigure(new_config);
 
     // Updating frame encryptor to a new object should force a call to the
     // proxy.
@@ -942,7 +942,7 @@ TEST(AudioSendStreamTest, ReconfigureWithFrameEncryptor) {
     new_config.crypto_options.sframe.require_frame_encryption = true;
     EXPECT_CALL(*helper.channel_send(), SetFrameEncryptor(Ne(nullptr)))
         .Times(1);
-    send_stream->Reconfigure(new_config, nullptr);
+    send_stream->Reconfigure(new_config);
   }
 }
 }  // namespace test

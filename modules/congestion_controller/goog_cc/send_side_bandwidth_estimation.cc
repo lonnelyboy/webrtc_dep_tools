@@ -184,14 +184,13 @@ void RttBasedBackoff::UpdatePropagationRtt(Timestamp at_time,
   last_propagation_rtt_ = propagation_rtt;
 }
 
-bool RttBasedBackoff::IsRttAboveLimit() const {
-  return CorrectedRtt() > rtt_limit_;
-}
-
-TimeDelta RttBasedBackoff::CorrectedRtt() const {
+TimeDelta RttBasedBackoff::CorrectedRtt(Timestamp at_time) const {
+  TimeDelta time_since_rtt = at_time - last_propagation_rtt_update_;
+  TimeDelta timeout_correction = time_since_rtt;
   // Avoid timeout when no packets are being sent.
-  TimeDelta timeout_correction = std::max(
-      last_packet_sent_ - last_propagation_rtt_update_, TimeDelta::Zero());
+  TimeDelta time_since_packet_sent = at_time - last_packet_sent_;
+  timeout_correction =
+      std::max(time_since_rtt - time_since_packet_sent, TimeDelta::Zero());
   return timeout_correction + last_propagation_rtt_;
 }
 
@@ -247,8 +246,7 @@ SendSideBandwidthEstimation::SendSideBandwidthEstimation(
   ParseFieldTrial({&disable_receiver_limit_caps_only_},
                   key_value_config->Lookup("WebRTC-Bwe-ReceiverLimitCapsOnly"));
   if (LossBasedBandwidthEstimatorV2Enabled()) {
-    loss_based_bandwidth_estimator_v2_.SetMinMaxBitrate(
-        min_bitrate_configured_, max_bitrate_configured_);
+    loss_based_bandwidth_estimator_v2_.SetMinBitrate(min_bitrate_configured_);
   }
 }
 
@@ -310,8 +308,6 @@ void SendSideBandwidthEstimation::SetMinMaxBitrate(DataRate min_bitrate,
   } else {
     max_bitrate_configured_ = kDefaultMaxBitrate;
   }
-  loss_based_bandwidth_estimator_v2_.SetMinMaxBitrate(min_bitrate_configured_,
-                                                      max_bitrate_configured_);
 }
 
 int SendSideBandwidthEstimation::GetMinBitrate() const {
@@ -329,8 +325,8 @@ LossBasedState SendSideBandwidthEstimation::loss_based_state() const {
   return loss_based_state_;
 }
 
-bool SendSideBandwidthEstimation::IsRttAboveLimit() const {
-  return rtt_backoff_.IsRttAboveLimit();
+DataRate SendSideBandwidthEstimation::delay_based_limit() const {
+  return delay_based_limit_;
 }
 
 DataRate SendSideBandwidthEstimation::GetEstimatedLinkCapacity() const {
@@ -374,8 +370,7 @@ void SendSideBandwidthEstimation::SetAcknowledgedRate(
 void SendSideBandwidthEstimation::UpdateLossBasedEstimator(
     const TransportPacketsFeedback& report,
     BandwidthUsage delay_detector_state,
-    absl::optional<DataRate> probe_bitrate,
-    DataRate upper_link_capacity) {
+    absl::optional<DataRate> probe_bitrate) {
   if (LossBasedBandwidthEstimatorV1Enabled()) {
     loss_based_bandwidth_estimator_v1_.UpdateLossStatistics(
         report.packet_feedbacks, report.feedback_time);
@@ -383,7 +378,7 @@ void SendSideBandwidthEstimation::UpdateLossBasedEstimator(
   if (LossBasedBandwidthEstimatorV2Enabled()) {
     loss_based_bandwidth_estimator_v2_.UpdateBandwidthEstimate(
         report.packet_feedbacks, delay_based_limit_, delay_detector_state,
-        probe_bitrate, upper_link_capacity);
+        probe_bitrate);
     UpdateEstimate(report.feedback_time);
   }
 }
@@ -469,7 +464,7 @@ void SendSideBandwidthEstimation::UpdateRtt(TimeDelta rtt, Timestamp at_time) {
 }
 
 void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
-  if (rtt_backoff_.IsRttAboveLimit()) {
+  if (rtt_backoff_.CorrectedRtt(at_time) > rtt_backoff_.rtt_limit_) {
     if (at_time - time_last_decrease_ >= rtt_backoff_.drop_interval_ &&
         current_target_ > rtt_backoff_.bandwidth_floor_) {
       time_last_decrease_ = at_time;
@@ -532,7 +527,8 @@ void SendSideBandwidthEstimation::UpdateEstimate(Timestamp at_time) {
 
   if (LossBasedBandwidthEstimatorV2ReadyForUse()) {
     LossBasedBweV2::Result result =
-        loss_based_bandwidth_estimator_v2_.GetLossBasedResult();
+        loss_based_bandwidth_estimator_v2_.GetLossBasedResult(
+            delay_based_limit_);
     loss_based_state_ = result.state;
     UpdateTargetBitrate(result.bandwidth_estimate, at_time);
     return;

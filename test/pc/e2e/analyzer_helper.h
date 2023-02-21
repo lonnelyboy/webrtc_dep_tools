@@ -15,7 +15,6 @@
 #include <string>
 
 #include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
 #include "api/sequence_checker.h"
 #include "api/test/track_id_stream_info_map.h"
 #include "rtc_base/thread_annotations.h"
@@ -32,24 +31,30 @@ namespace webrtc_pc_e2e {
 // AddTrackToStreamMapping, GetStreamLabelFromTrackId and
 // GetSyncGroupLabelFromTrackId must be invoked from the signaling thread. Get
 // methods should be invoked only after all data is added. Mixing Get methods
-// with adding new data may lead to undefined behavior.
+// with adding new data may lead to undefined behaviour.
 class AnalyzerHelper : public TrackIdStreamInfoMap {
  public:
   AnalyzerHelper();
 
-  void AddTrackToStreamMapping(absl::string_view track_id,
-                               absl::string_view receiver_peer,
-                               absl::string_view stream_label,
-                               absl::optional<std::string> sync_group);
   void AddTrackToStreamMapping(std::string track_id, std::string stream_label);
   void AddTrackToStreamMapping(std::string track_id,
                                std::string stream_label,
                                std::string sync_group);
 
-  StreamInfo GetStreamInfoFromTrackId(
+  absl::string_view GetStreamLabelFromTrackId(
+      absl::string_view track_id) const override;
+
+  absl::string_view GetSyncGroupLabelFromTrackId(
       absl::string_view track_id) const override;
 
  private:
+  struct StreamInfo {
+    std::string stream_label;
+    std::string sync_group;
+  };
+
+  const StreamInfo& GetStreamInfoFromTrackId(absl::string_view track_id) const;
+
   SequenceChecker signaling_sequence_checker_;
   std::map<std::string, StreamInfo> track_to_stream_map_
       RTC_GUARDED_BY(signaling_sequence_checker_);

@@ -736,10 +736,13 @@ bool VideoCodecTestFixtureImpl::SetUpAndInitObjects(
   int clip_height = config_.clip_height.value_or(config_.codec_settings.height);
 
   // Create file objects for quality analysis.
-  source_frame_reader_ = CreateYuvFrameReader(
-      config_.filepath,
-      Resolution({.width = clip_width, .height = clip_height}),
-      YuvFrameReaderImpl::RepeatMode::kPingPong);
+  source_frame_reader_.reset(new YuvFrameReaderImpl(
+      config_.filepath, clip_width, clip_height,
+      config_.reference_width.value_or(clip_width),
+      config_.reference_height.value_or(clip_height),
+      YuvFrameReaderImpl::RepeatMode::kPingPong, config_.clip_fps,
+      config_.codec_settings.maxFramerate));
+  EXPECT_TRUE(source_frame_reader_->Init());
 
   RTC_DCHECK(encoded_frame_writers_.empty());
   RTC_DCHECK(decoded_frame_writers_.empty());
@@ -817,7 +820,7 @@ void VideoCodecTestFixtureImpl::ReleaseAndCloseObjects(
     DestroyEncoderAndDecoder();
   });
 
-  source_frame_reader_.reset();
+  source_frame_reader_->Close();
 
   // Close visualization files.
   for (auto& encoded_frame_writer : encoded_frame_writers_) {

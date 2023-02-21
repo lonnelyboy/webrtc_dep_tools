@@ -50,11 +50,9 @@ using ::webrtc::SafeTask;
 using ::webrtc::TimeDelta;
 
 // List of MAC addresses of known VPN (for windows).
-constexpr uint8_t kVpns[3][6] = {
-    // Cisco AnyConnect SSL VPN Client.
+constexpr uint8_t kVpns[2][6] = {
+    // Cisco AnyConnect.
     {0x0, 0x5, 0x9A, 0x3C, 0x7A, 0x0},
-    // Cisco AnyConnect IPSEC VPN Client.
-    {0x0, 0x5, 0x9A, 0x3C, 0x78, 0x0},
     // GlobalProtect Virtual Ethernet.
     {0x2, 0x50, 0x41, 0x0, 0x0, 0x1},
 };
@@ -318,22 +316,12 @@ NetworkManagerBase::enumeration_permission() const {
   return enumeration_permission_;
 }
 
-std::unique_ptr<Network> NetworkManagerBase::CreateNetwork(
-    absl::string_view name,
-    absl::string_view description,
-    const IPAddress& prefix,
-    int prefix_length,
-    AdapterType type) const {
-  return std::make_unique<Network>(name, description, prefix, prefix_length,
-                                   type, field_trials_.get());
-}
-
 std::vector<const Network*> NetworkManagerBase::GetAnyAddressNetworks() {
   std::vector<const Network*> networks;
   if (!ipv4_any_address_network_) {
     const rtc::IPAddress ipv4_any_address(INADDR_ANY);
-    ipv4_any_address_network_ =
-        CreateNetwork("any", "any", ipv4_any_address, 0, ADAPTER_TYPE_ANY);
+    ipv4_any_address_network_ = std::make_unique<Network>(
+        "any", "any", ipv4_any_address, 0, ADAPTER_TYPE_ANY, field_trials_);
     ipv4_any_address_network_->set_default_local_address_provider(this);
     ipv4_any_address_network_->set_mdns_responder_provider(this);
     ipv4_any_address_network_->AddIP(ipv4_any_address);
@@ -342,8 +330,8 @@ std::vector<const Network*> NetworkManagerBase::GetAnyAddressNetworks() {
 
   if (!ipv6_any_address_network_) {
     const rtc::IPAddress ipv6_any_address(in6addr_any);
-    ipv6_any_address_network_ =
-        CreateNetwork("any", "any", ipv6_any_address, 0, ADAPTER_TYPE_ANY);
+    ipv6_any_address_network_ = std::make_unique<Network>(
+        "any", "any", ipv6_any_address, 0, ADAPTER_TYPE_ANY, field_trials_);
     ipv6_any_address_network_->set_default_local_address_provider(this);
     ipv6_any_address_network_->set_mdns_responder_provider(this);
     ipv6_any_address_network_->AddIP(ipv6_any_address);
@@ -543,14 +531,14 @@ bool NetworkManagerBase::IsVpnMacAddress(
 BasicNetworkManager::BasicNetworkManager(
     NetworkMonitorFactory* network_monitor_factory,
     SocketFactory* socket_factory,
-    const webrtc::FieldTrialsView* field_trials_view)
-    : NetworkManagerBase(field_trials_view),
+    const webrtc::FieldTrialsView* field_trials)
+    : field_trials_(field_trials),
       network_monitor_factory_(network_monitor_factory),
       socket_factory_(socket_factory),
       allow_mac_based_ipv6_(
-          field_trials()->IsEnabled("WebRTC-AllowMACBasedIPv6")),
+          field_trials_->IsEnabled("WebRTC-AllowMACBasedIPv6")),
       bind_using_ifname_(
-          !field_trials()->IsDisabled("WebRTC-BindUsingInterfaceName")) {
+          !field_trials_->IsDisabled("WebRTC-BindUsingInterfaceName")) {
   RTC_DCHECK(socket_factory_);
 }
 
@@ -680,8 +668,9 @@ void BasicNetworkManager::ConvertIfAddrs(
       if_info.adapter_type = ADAPTER_TYPE_VPN;
     }
 
-    auto network = CreateNetwork(cursor->ifa_name, cursor->ifa_name, prefix,
-                                 prefix_length, if_info.adapter_type);
+    auto network = std::make_unique<Network>(
+        cursor->ifa_name, cursor->ifa_name, prefix, prefix_length,
+        if_info.adapter_type, field_trials_.get());
     network->set_default_local_address_provider(this);
     network->set_scope_id(scope_id);
     network->AddIP(ip);
@@ -866,14 +855,12 @@ bool BasicNetworkManager::CreateNetworks(
                   reinterpret_cast<const uint8_t*>(
                       adapter_addrs->PhysicalAddress),
                   adapter_addrs->PhysicalAddressLength))) {
-            // With MAC-based detection we do not know the
-            // underlying adapter type.
-            underlying_type_for_vpn = ADAPTER_TYPE_UNKNOWN;
+            underlying_type_for_vpn = adapter_type;
             adapter_type = ADAPTER_TYPE_VPN;
           }
 
-          auto network = CreateNetwork(name, description, prefix, prefix_length,
-                                       adapter_type);
+          auto network = std::make_unique<Network>(name, description, prefix,
+                                                   prefix_length, adapter_type);
           network->set_underlying_type_for_vpn(underlying_type_for_vpn);
           network->set_default_local_address_provider(this);
           network->set_mdns_responder_provider(this);
@@ -978,7 +965,7 @@ void BasicNetworkManager::StartNetworkMonitor() {
   }
   if (!network_monitor_) {
     network_monitor_.reset(
-        network_monitor_factory_->CreateNetworkMonitor(*field_trials()));
+        network_monitor_factory_->CreateNetworkMonitor(*field_trials_));
     if (!network_monitor_) {
       return;
     }

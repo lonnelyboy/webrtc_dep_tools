@@ -42,7 +42,6 @@
 #include "rtc_base/thread.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
-#include "test/scoped_key_value_config.h"
 
 namespace webrtc {
 
@@ -101,8 +100,7 @@ class PeerConnectionHeaderExtensionTest
 
     auto fake_port_allocator = std::make_unique<cricket::FakePortAllocator>(
         rtc::Thread::Current(),
-        std::make_unique<rtc::BasicPacketSocketFactory>(socket_server_.get()),
-        &field_trials_);
+        std::make_unique<rtc::BasicPacketSocketFactory>(socket_server_.get()));
     auto observer = std::make_unique<MockPeerConnectionObserver>();
     PeerConnectionInterface::RTCConfiguration config;
     if (semantics)
@@ -117,7 +115,6 @@ class PeerConnectionHeaderExtensionTest
         pc_factory, result.MoveValue(), std::move(observer));
   }
 
-  webrtc::test::ScopedKeyValueConfig field_trials_;
   std::unique_ptr<rtc::SocketServer> socket_server_;
   rtc::AutoSocketServerThread main_thread_;
   std::vector<RtpHeaderExtensionCapability> extensions_;
@@ -227,68 +224,6 @@ TEST_P(PeerConnectionHeaderExtensionTest, NegotiatedExtensionsAreAccessible) {
   EXPECT_THAT(transceiver1->HeaderExtensionsNegotiated(),
               ElementsAre(Field(&RtpHeaderExtensionCapability::uri, "uri2"),
                           Field(&RtpHeaderExtensionCapability::uri, "uri3")));
-}
-
-TEST_P(PeerConnectionHeaderExtensionTest, OfferedExtensionsArePerTransceiver) {
-  cricket::MediaType media_type;
-  SdpSemantics semantics;
-  std::tie(media_type, semantics) = GetParam();
-  if (semantics != SdpSemantics::kUnifiedPlan)
-    return;
-  std::unique_ptr<PeerConnectionWrapper> pc1 =
-      CreatePeerConnection(media_type, semantics);
-  auto transceiver1 = pc1->AddTransceiver(media_type);
-  auto modified_extensions = transceiver1->HeaderExtensionsToOffer();
-  modified_extensions[3].direction = RtpTransceiverDirection::kStopped;
-  transceiver1->SetOfferedRtpHeaderExtensions(modified_extensions);
-  auto transceiver2 = pc1->AddTransceiver(media_type);
-
-  auto session_description = pc1->CreateOffer();
-  EXPECT_THAT(session_description->description()
-                  ->contents()[0]
-                  .media_description()
-                  ->rtp_header_extensions(),
-              ElementsAre(Field(&RtpExtension::uri, "uri2"),
-                          Field(&RtpExtension::uri, "uri3")));
-  EXPECT_THAT(session_description->description()
-                  ->contents()[1]
-                  .media_description()
-                  ->rtp_header_extensions(),
-              ElementsAre(Field(&RtpExtension::uri, "uri2"),
-                          Field(&RtpExtension::uri, "uri3"),
-                          Field(&RtpExtension::uri, "uri4")));
-}
-
-TEST_P(PeerConnectionHeaderExtensionTest, RemovalAfterRenegotiation) {
-  cricket::MediaType media_type;
-  SdpSemantics semantics;
-  std::tie(media_type, semantics) = GetParam();
-  if (semantics != SdpSemantics::kUnifiedPlan)
-    return;
-  std::unique_ptr<PeerConnectionWrapper> pc1 =
-      CreatePeerConnection(media_type, semantics);
-  std::unique_ptr<PeerConnectionWrapper> pc2 =
-      CreatePeerConnection(media_type, semantics);
-  auto transceiver1 = pc1->AddTransceiver(media_type);
-
-  auto offer = pc1->CreateOfferAndSetAsLocal(
-      PeerConnectionInterface::RTCOfferAnswerOptions());
-  pc2->SetRemoteDescription(std::move(offer));
-  auto answer = pc2->CreateAnswerAndSetAsLocal(
-      PeerConnectionInterface::RTCOfferAnswerOptions());
-  pc1->SetRemoteDescription(std::move(answer));
-
-  auto modified_extensions = transceiver1->HeaderExtensionsToOffer();
-  modified_extensions[3].direction = RtpTransceiverDirection::kStopped;
-  modified_extensions[3].direction = RtpTransceiverDirection::kStopped;
-  transceiver1->SetOfferedRtpHeaderExtensions(modified_extensions);
-  auto session_description = pc1->CreateOffer();
-  EXPECT_THAT(session_description->description()
-                  ->contents()[0]
-                  .media_description()
-                  ->rtp_header_extensions(),
-              ElementsAre(Field(&RtpExtension::uri, "uri2"),
-                          Field(&RtpExtension::uri, "uri3")));
 }
 
 INSTANTIATE_TEST_SUITE_P(

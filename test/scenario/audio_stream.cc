@@ -67,20 +67,6 @@ absl::optional<std::string> CreateAdaptationString(
 }
 }  // namespace
 
-std::vector<RtpExtension> GetAudioRtpExtensions(
-    const AudioStreamConfig& config) {
-  std::vector<RtpExtension> extensions;
-  if (config.stream.in_bandwidth_estimation) {
-    extensions.push_back({RtpExtension::kTransportSequenceNumberUri,
-                          kTransportSequenceNumberExtensionId});
-  }
-  if (config.stream.abs_send_time) {
-    extensions.push_back(
-        {RtpExtension::kAbsSendTimeUri, kAbsSendTimeExtensionId});
-  }
-  return extensions;
-}
-
 SendAudioStream::SendAudioStream(
     CallClient* sender,
     AudioStreamConfig config,
@@ -107,10 +93,9 @@ SendAudioStream::SendAudioStream(
   RTC_DCHECK_LE(config.source.channels, 2);
   send_config.encoder_factory = encoder_factory;
 
-  bool use_fixed_rate = !config.encoder.min_rate && !config.encoder.max_rate;
-  if (use_fixed_rate)
+  if (config.encoder.fixed_rate)
     send_config.send_codec_spec->target_bitrate_bps =
-        config.encoder.fixed_rate.bps();
+        config.encoder.fixed_rate->bps();
   if (!config.adapt.binary_proto.empty()) {
     send_config.audio_network_adaptor_config = config.adapt.binary_proto;
   } else if (config.network_adaptation) {
@@ -121,9 +106,9 @@ SendAudioStream::SendAudioStream(
       config.stream.in_bandwidth_estimation) {
     DataRate min_rate = DataRate::Infinity();
     DataRate max_rate = DataRate::Infinity();
-    if (use_fixed_rate) {
-      min_rate = config.encoder.fixed_rate;
-      max_rate = config.encoder.fixed_rate;
+    if (config.encoder.fixed_rate) {
+      min_rate = *config.encoder.fixed_rate;
+      max_rate = *config.encoder.fixed_rate;
     } else {
       min_rate = *config.encoder.min_rate;
       max_rate = *config.encoder.max_rate;
@@ -134,13 +119,20 @@ SendAudioStream::SendAudioStream(
 
   if (config.stream.in_bandwidth_estimation) {
     send_config.send_codec_spec->transport_cc_enabled = true;
+    send_config.rtp.extensions = {{RtpExtension::kTransportSequenceNumberUri,
+                                   kTransportSequenceNumberExtensionId}};
   }
-  send_config.rtp.extensions = GetAudioRtpExtensions(config);
+  if (config.stream.abs_send_time) {
+    send_config.rtp.extensions.push_back(
+        {RtpExtension::kAbsSendTimeUri, kAbsSendTimeExtensionId});
+  }
 
   sender_->SendTask([&] {
     send_stream_ = sender_->call_->CreateAudioSendStream(send_config);
-    sender->call_->OnAudioTransportOverheadChanged(
-        sender_->transport_->packet_overhead().bytes());
+    if (field_trial::IsEnabled("WebRTC-SendSideBwe-WithOverhead")) {
+      sender->call_->OnAudioTransportOverheadChanged(
+          sender_->transport_->packet_overhead().bytes());
+    }
   });
 }
 
@@ -188,6 +180,11 @@ ReceiveAudioStream::ReceiveAudioStream(
   recv_config.rtcp_send_transport = feedback_transport;
   recv_config.rtp.remote_ssrc = send_stream->ssrc_;
   receiver->ssrc_media_types_[recv_config.rtp.remote_ssrc] = MediaType::AUDIO;
+  if (config.stream.in_bandwidth_estimation) {
+    recv_config.rtp.transport_cc = true;
+    recv_config.rtp.extensions = {{RtpExtension::kTransportSequenceNumberUri,
+                                   kTransportSequenceNumberExtensionId}};
+  }
   recv_config.decoder_factory = decoder_factory;
   recv_config.decoder_map = {
       {CallTest::kAudioSendPayloadType, {"opus", 48000, 2}}};

@@ -47,6 +47,7 @@
 #include "rtc_base/thread_annotations.h"
 
 namespace cricket {
+class ChannelManager;
 class MediaEngineInterface;
 }
 

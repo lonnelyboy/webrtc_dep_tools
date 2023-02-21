@@ -25,7 +25,6 @@
 #include "api/video/video_content_type.h"
 #include "api/video/video_frame_buffer.h"
 #include "api/video/video_timing.h"
-#include "api/video_codecs/scalability_mode.h"
 #include "api/video_codecs/vp8_temporal_layers.h"
 #include "api/video_codecs/vp8_temporal_layers_factory.h"
 #include "modules/video_coding/codecs/interface/common_constants.h"
@@ -1104,17 +1103,6 @@ void LibvpxVp8Encoder::PopulateCodecSpecific(CodecSpecificInfo* codec_specific,
     codec_specific->template_structure->resolutions = {
         RenderResolution(pkt.data.frame.width[0], pkt.data.frame.height[0])};
   }
-  switch (vpx_configs_[encoder_idx].ts_number_layers) {
-    case 1:
-      codec_specific->scalability_mode = ScalabilityMode::kL1T1;
-      break;
-    case 2:
-      codec_specific->scalability_mode = ScalabilityMode::kL1T2;
-      break;
-    case 3:
-      codec_specific->scalability_mode = ScalabilityMode::kL1T3;
-      break;
-  }
 }
 
 int LibvpxVp8Encoder::GetEncodedPartitions(const VideoFrame& input_image,
@@ -1163,7 +1151,7 @@ int LibvpxVp8Encoder::GetEncodedPartitions(const VideoFrame& input_image,
         }
         encoded_images_[encoder_idx].SetEncodedData(buffer);
         encoded_images_[encoder_idx].set_size(encoded_pos);
-        encoded_images_[encoder_idx].SetSimulcastIndex(stream_idx);
+        encoded_images_[encoder_idx].SetSpatialIndex(stream_idx);
         PopulateCodecSpecific(&codec_specific, *pkt, stream_idx, encoder_idx,
                               input_image.timestamp());
         if (codec_specific.codecSpecific.VP8.temporalIdx != kNoTemporalIdx) {

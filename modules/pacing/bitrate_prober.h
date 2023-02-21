@@ -45,7 +45,7 @@ struct BitrateProberConfig {
 class BitrateProber {
  public:
   explicit BitrateProber(const FieldTrialsView& field_trials);
-  ~BitrateProber() = default;
+  ~BitrateProber();
 
   void SetEnabled(bool enable);
 
@@ -117,6 +117,9 @@ class BitrateProber {
 
   // Time the next probe should be sent when in kActive state.
   Timestamp next_probe_time_;
+
+  int total_probe_count_;
+  int total_failed_probe_count_;
 
   BitrateProberConfig config_;
 };

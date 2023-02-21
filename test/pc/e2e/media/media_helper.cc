@@ -15,14 +15,22 @@
 #include "absl/types/variant.h"
 #include "api/media_stream_interface.h"
 #include "api/test/create_frame_generator.h"
-#include "api/test/pclf/media_configuration.h"
-#include "api/test/pclf/peer_configurer.h"
 #include "test/frame_generator_capturer.h"
 #include "test/platform_video_capturer.h"
 #include "test/testsupport/file_utils.h"
 
 namespace webrtc {
 namespace webrtc_pc_e2e {
+namespace {
+
+using VideoConfig =
+    ::webrtc::webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::VideoConfig;
+using AudioConfig =
+    ::webrtc::webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::AudioConfig;
+using CapturingDeviceIndex = ::webrtc::webrtc_pc_e2e::
+    PeerConnectionE2EQualityTestFixture::CapturingDeviceIndex;
+
+}  // namespace
 
 void MediaHelper::MaybeAddAudio(TestPeer* peer) {
   if (!peer->params().audio_config) {
@@ -36,7 +44,7 @@ void MediaHelper::MaybeAddAudio(TestPeer* peer) {
                                            source.get());
   std::string sync_group = audio_config.sync_group
                                ? audio_config.sync_group.value()
-                               : audio_config.stream_label.value() + "-sync";
+                               : audio_config.stream_label.value();
   peer->AddTrack(track, {sync_group, *audio_config.stream_label});
 }
 
@@ -71,7 +79,7 @@ MediaHelper::MaybeAddVideo(TestPeer* peer) {
     }
     std::string sync_group = video_config.sync_group
                                  ? video_config.sync_group.value()
-                                 : video_config.stream_label.value() + "-sync";
+                                 : video_config.stream_label.value();
     RTCErrorOr<rtc::scoped_refptr<RtpSenderInterface>> sender =
         peer->AddTrack(track, {sync_group, *video_config.stream_label});
     RTC_CHECK(sender.ok());
@@ -97,7 +105,7 @@ MediaHelper::MaybeAddVideo(TestPeer* peer) {
 
 std::unique_ptr<test::TestVideoCapturer> MediaHelper::CreateVideoCapturer(
     const VideoConfig& video_config,
-    PeerConfigurer::VideoSource source,
+    PeerConfigurerImpl::VideoSource source,
     std::unique_ptr<test::TestVideoCapturer::FramePreprocessor>
         frame_preprocessor) {
   CapturingDeviceIndex* capturing_device_index =

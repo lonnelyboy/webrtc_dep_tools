@@ -32,7 +32,7 @@ class MockIceAgent : public IceAgentInterface {
   MOCK_METHOD(void, UpdateState, (), (override));
   MOCK_METHOD(void,
               ForgetLearnedStateForConnections,
-              (rtc::ArrayView<const Connection* const>),
+              (std::vector<const Connection*>),
               (override));
   MOCK_METHOD(void, SendPingRequest, (const Connection*), (override));
   MOCK_METHOD(void,
@@ -41,7 +41,7 @@ class MockIceAgent : public IceAgentInterface {
               (override));
   MOCK_METHOD(bool,
               PruneConnections,
-              (rtc::ArrayView<const Connection* const>),
+              (std::vector<const Connection*>),
               (override));
 };
 

@@ -38,6 +38,32 @@ using Factory =
                                 webrtc::LibaomAv1EncoderTemplateAdapter,
 #endif
                                 webrtc::LibvpxVp9EncoderTemplateAdapter>;
+
+absl::optional<SdpVideoFormat> MatchOriginalFormat(
+    const SdpVideoFormat& format) {
+  const auto supported_formats = Factory().GetSupportedFormats();
+
+  absl::optional<SdpVideoFormat> res;
+  int best_parameter_match = 0;
+  for (const auto& supported_format : supported_formats) {
+    if (absl::EqualsIgnoreCase(supported_format.name, format.name)) {
+      int matching_parameters = 0;
+      for (const auto& kv : supported_format.parameters) {
+        auto it = format.parameters.find(kv.first);
+        if (it != format.parameters.end() && it->second == kv.second) {
+          matching_parameters += 1;
+        }
+      }
+
+      if (!res || matching_parameters > best_parameter_match) {
+        res = supported_format;
+        best_parameter_match = matching_parameters;
+      }
+    }
+  }
+
+  return res;
+}
 }  // namespace
 
 std::vector<SdpVideoFormat> InternalEncoderFactory::GetSupportedFormats()
@@ -47,8 +73,7 @@ std::vector<SdpVideoFormat> InternalEncoderFactory::GetSupportedFormats()
 
 std::unique_ptr<VideoEncoder> InternalEncoderFactory::CreateVideoEncoder(
     const SdpVideoFormat& format) {
-  auto original_format =
-      FuzzyMatchSdpVideoFormat(Factory().GetSupportedFormats(), format);
+  auto original_format = MatchOriginalFormat(format);
   return original_format ? Factory().CreateVideoEncoder(*original_format)
                          : nullptr;
 }
@@ -56,8 +81,7 @@ std::unique_ptr<VideoEncoder> InternalEncoderFactory::CreateVideoEncoder(
 VideoEncoderFactory::CodecSupport InternalEncoderFactory::QueryCodecSupport(
     const SdpVideoFormat& format,
     absl::optional<std::string> scalability_mode) const {
-  auto original_format =
-      FuzzyMatchSdpVideoFormat(Factory().GetSupportedFormats(), format);
+  auto original_format = MatchOriginalFormat(format);
   return original_format
              ? Factory().QueryCodecSupport(*original_format, scalability_mode)
              : VideoEncoderFactory::CodecSupport{.is_supported = false};

@@ -13,7 +13,6 @@
 
 #include <memory>
 #include <set>
-#include <vector>
 
 #include "api/metronome/metronome.h"
 #include "api/task_queue/task_queue_base.h"
@@ -37,12 +36,13 @@ class ForcedTickMetronome : public Metronome {
   size_t NumListeners();
 
   // Metronome implementation.
-  void RequestCallOnNextTick(absl::AnyInvocable<void() &&> callback) override;
+  void AddListener(TickListener* listener) override;
+  void RemoveListener(TickListener* listener) override;
   TimeDelta TickPeriod() const override;
 
  private:
   const TimeDelta tick_period_;
-  std::vector<absl::AnyInvocable<void() &&>> callbacks_;
+  std::set<TickListener*> listeners_;
 };
 
 // FakeMetronome is a metronome that ticks based on a repeating task at the
@@ -53,15 +53,23 @@ class ForcedTickMetronome : public Metronome {
 // on the proper task queue.
 class FakeMetronome : public Metronome {
  public:
-  explicit FakeMetronome(TimeDelta tick_period);
+  FakeMetronome(TaskQueueFactory* factory, TimeDelta tick_period);
+  ~FakeMetronome() override;
 
   // Metronome implementation.
-  void RequestCallOnNextTick(absl::AnyInvocable<void() &&> callback) override;
+  void AddListener(TickListener* listener) override;
+  void RemoveListener(TickListener* listener) override;
   TimeDelta TickPeriod() const override;
+
+  void Stop();
 
  private:
   const TimeDelta tick_period_;
-  std::vector<absl::AnyInvocable<void() &&>> callbacks_;
+  RepeatingTaskHandle tick_task_;
+  bool started_ RTC_GUARDED_BY(mutex_) = false;
+  std::set<TickListener*> listeners_ RTC_GUARDED_BY(mutex_);
+  Mutex mutex_;
+  rtc::TaskQueue queue_;
 };
 
 }  // namespace webrtc::test

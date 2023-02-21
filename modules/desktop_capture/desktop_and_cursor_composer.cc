@@ -177,10 +177,6 @@ void DesktopAndCursorComposer::Start(DesktopCapturer::Callback* callback) {
   desktop_capturer_->Start(this);
 }
 
-void DesktopAndCursorComposer::SetMaxFrameRate(uint32_t max_frame_rate) {
-  desktop_capturer_->SetMaxFrameRate(max_frame_rate);
-}
-
 void DesktopAndCursorComposer::SetSharedMemoryFactory(
     std::unique_ptr<SharedMemoryFactory> shared_memory_factory) {
   desktop_capturer_->SetSharedMemoryFactory(std::move(shared_memory_factory));
@@ -217,10 +213,6 @@ DesktopCaptureMetadata DesktopAndCursorComposer::GetMetadata() {
   return desktop_capturer_->GetMetadata();
 }
 #endif  // defined(WEBRTC_USE_GIO)
-
-void DesktopAndCursorComposer::OnFrameCaptureStart() {
-  callback_->OnFrameCaptureStart();
-}
 
 void DesktopAndCursorComposer::OnCaptureResult(
     DesktopCapturer::Result result,

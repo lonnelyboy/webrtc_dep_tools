@@ -30,8 +30,13 @@
 #include "rtc_base/time_utils.h"
 
 namespace webrtc {
+namespace {
+constexpr size_t kMaxEventsInHistory = 10000;
+// The config-history is supposed to be unbounded, but needs to have some bound
+// to prevent an attack via unreasonable memory use.
+constexpr size_t kMaxEventsInConfigHistory = 1000;
 
-std::unique_ptr<RtcEventLogEncoder> RtcEventLogImpl::CreateEncoder(
+std::unique_ptr<RtcEventLogEncoder> CreateEncoder(
     RtcEventLog::EncodingType type) {
   switch (type) {
     case RtcEventLog::EncodingType::Legacy:
@@ -47,14 +52,11 @@ std::unique_ptr<RtcEventLogEncoder> RtcEventLogImpl::CreateEncoder(
       return std::unique_ptr<RtcEventLogEncoder>(nullptr);
   }
 }
+}  // namespace
 
-RtcEventLogImpl::RtcEventLogImpl(std::unique_ptr<RtcEventLogEncoder> encoder,
-                                 TaskQueueFactory* task_queue_factory,
-                                 size_t max_events_in_history,
-                                 size_t max_config_events_in_history)
-    : max_events_in_history_(max_events_in_history),
-      max_config_events_in_history_(max_config_events_in_history),
-      event_encoder_(std::move(encoder)),
+RtcEventLogImpl::RtcEventLogImpl(RtcEventLog::EncodingType encoding_type,
+                                 TaskQueueFactory* task_queue_factory)
+    : event_encoder_(CreateEncoder(encoding_type)),
       num_config_events_written_(0),
       last_output_ms_(rtc::TimeMillis()),
       output_scheduled_(false),
@@ -150,7 +152,7 @@ void RtcEventLogImpl::Log(std::unique_ptr<RtcEvent> event) {
 
 void RtcEventLogImpl::ScheduleOutput() {
   RTC_DCHECK(event_output_ && event_output_->IsActive());
-  if (history_.size() >= max_events_in_history_) {
+  if (history_.size() >= kMaxEventsInHistory) {
     // We have to emergency drain the buffer. We can't wait for the scheduled
     // output task because there might be other event incoming before that.
     LogEventsFromMemoryToOutput();
@@ -188,9 +190,8 @@ void RtcEventLogImpl::ScheduleOutput() {
 void RtcEventLogImpl::LogToMemory(std::unique_ptr<RtcEvent> event) {
   std::deque<std::unique_ptr<RtcEvent>>& container =
       event->IsConfigEvent() ? config_history_ : history_;
-  const size_t container_max_size = event->IsConfigEvent()
-                                        ? max_config_events_in_history_
-                                        : max_events_in_history_;
+  const size_t container_max_size =
+      event->IsConfigEvent() ? kMaxEventsInConfigHistory : kMaxEventsInHistory;
 
   if (container.size() >= container_max_size) {
     RTC_DCHECK(!event_output_);  // Shouldn't lose events if we have an output.

@@ -39,7 +39,7 @@ class WgcCaptureSession final {
 
   ~WgcCaptureSession();
 
-  HRESULT StartCapture(const DesktopCaptureOptions& options);
+  HRESULT StartCapture();
 
   // Returns a frame from the frame pool, if any are present.
   HRESULT GetFrame(std::unique_ptr<DesktopFrame>* output_frame);

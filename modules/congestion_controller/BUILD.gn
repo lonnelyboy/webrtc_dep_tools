@@ -27,7 +27,7 @@ rtc_library("congestion_controller") {
   ]
 
   deps = [
-    "../../api:rtp_parameters",
+    "../../api/transport:field_trial_based_config",
     "../../api/transport:network_control",
     "../../api/units:data_rate",
     "../../api/units:time_delta",
@@ -39,6 +39,10 @@ rtc_library("congestion_controller") {
     "../remote_bitrate_estimator",
     "../rtp_rtcp:rtp_rtcp_format",
   ]
+
+  if (!build_with_mozilla) {
+    deps += [ "../../rtc_base" ]
+  }
 }
 
 if (rtc_include_tests && !build_with_chromium) {

@@ -20,9 +20,6 @@
 #include "api/test/metrics/metrics_exporter.h"
 #include "api/test/metrics/stdout_metrics_exporter.h"
 #include "api/test/network_emulation_manager.h"
-#include "api/test/pclf/media_configuration.h"
-#include "api/test/pclf/media_quality_test_params.h"
-#include "api/test/pclf/peer_configurer.h"
 #include "api/test/peerconnection_quality_test_fixture.h"
 #include "api/test/simulated_network.h"
 #include "api/test/time_controller.h"
@@ -38,9 +35,11 @@ ABSL_DECLARE_FLAG(bool, quick);
 namespace webrtc {
 namespace test {
 
-using ::webrtc::webrtc_pc_e2e::AudioConfig;
-using ::webrtc::webrtc_pc_e2e::PeerConfigurer;
-using ::webrtc::webrtc_pc_e2e::RunParams;
+using PeerConfigurer =
+    webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::PeerConfigurer;
+using RunParams = webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::RunParams;
+using AudioConfig =
+    webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::AudioConfig;
 
 namespace {
 
@@ -68,14 +67,10 @@ CreateTestFixture(absl::string_view test_case_name,
       std::string(test_case_name), time_controller,
       /*audio_quality_analyzer=*/nullptr,
       /*video_quality_analyzer=*/nullptr);
-  auto alice = std::make_unique<PeerConfigurer>(
-      network_links.first->network_dependencies());
-  auto bob = std::make_unique<PeerConfigurer>(
-      network_links.second->network_dependencies());
-  alice_configurer(alice.get());
-  bob_configurer(bob.get());
-  fixture->AddPeer(std::move(alice));
-  fixture->AddPeer(std::move(bob));
+  fixture->AddPeer(network_links.first->network_dependencies(),
+                   alice_configurer);
+  fixture->AddPeer(network_links.second->network_dependencies(),
+                   bob_configurer);
   fixture->AddQualityMetricsReporter(
       std::make_unique<webrtc_pc_e2e::NetworkQualityMetricsReporter>(
           network_links.first, network_links.second,

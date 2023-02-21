@@ -14,7 +14,6 @@
 
 #include "absl/memory/memory.h"
 #include "api/jsep_session_description.h"
-#include "api/test/pclf/media_configuration.h"
 #include "media/base/media_constants.h"
 #include "p2p/base/p2p_constants.h"
 #include "pc/sdp_utils.h"
@@ -23,6 +22,8 @@
 namespace webrtc {
 namespace webrtc_pc_e2e {
 namespace {
+
+using VideoCodecConfig = PeerConnectionE2EQualityTestFixture::VideoCodecConfig;
 
 std::string CodecRequiredParamsToString(
     const std::map<std::string, std::string>& codec_required_params) {
@@ -166,7 +167,7 @@ void SignalingInterceptor::FillSimulcastContext(
 
 LocalAndRemoteSdp SignalingInterceptor::PatchOffer(
     std::unique_ptr<SessionDescriptionInterface> offer,
-    const VideoCodecConfig& first_codec) {
+    const PeerConnectionE2EQualityTestFixture::VideoCodecConfig& first_codec) {
   for (auto& content : offer->description()->contents()) {
     context_.mids_order.push_back(content.mid());
     cricket::MediaContentDescription* media_desc = content.media_description();
@@ -363,7 +364,7 @@ LocalAndRemoteSdp SignalingInterceptor::PatchVp9Offer(
 
 LocalAndRemoteSdp SignalingInterceptor::PatchAnswer(
     std::unique_ptr<SessionDescriptionInterface> answer,
-    const VideoCodecConfig& first_codec) {
+    const PeerConnectionE2EQualityTestFixture::VideoCodecConfig& first_codec) {
   for (auto& content : answer->description()->contents()) {
     cricket::MediaContentDescription* media_desc = content.media_description();
     if (media_desc->type() != cricket::MediaType::MEDIA_TYPE_VIDEO) {

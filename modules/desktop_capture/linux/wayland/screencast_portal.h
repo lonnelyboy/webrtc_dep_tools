@@ -16,15 +16,14 @@
 #include <string>
 
 #include "modules/desktop_capture/desktop_capture_types.h"
+#include "modules/desktop_capture/linux/wayland/portal_request_response.h"
 #include "modules/desktop_capture/linux/wayland/screen_capture_portal_interface.h"
-#include "modules/portal/portal_request_response.h"
-#include "modules/portal/xdg_desktop_portal_utils.h"
-#include "modules/portal/xdg_session_details.h"
+#include "modules/desktop_capture/linux/wayland/xdg_desktop_portal_utils.h"
+#include "modules/desktop_capture/linux/wayland/xdg_session_details.h"
 
 namespace webrtc {
 
-class RTC_EXPORT ScreenCastPortal
-    : public xdg_portal::ScreenCapturePortalInterface {
+class ScreenCastPortal : public xdg_portal::ScreenCapturePortalInterface {
  public:
   using ProxyRequestResponseHandler = void (*)(GObject* object,
                                                GAsyncResult* result,
@@ -85,10 +84,7 @@ class RTC_EXPORT ScreenCastPortal
                    ProxyRequestResponseHandler proxy_request_response_handler,
                    SourcesRequestResponseSignalHandler
                        sources_request_response_signal_handler,
-                   gpointer user_data,
-                   // TODO(chromium:1291247): Remove the default option once
-                   // downstream has been adjusted.
-                   bool prefer_cursor_embedded = false);
+                   gpointer user_data);
 
   ~ScreenCastPortal();
 
@@ -144,7 +140,7 @@ class RTC_EXPORT ScreenCastPortal
   CaptureSourceType capture_source_type_ =
       ScreenCastPortal::CaptureSourceType::kScreen;
 
-  CursorMode cursor_mode_ = CursorMode::kMetadata;
+  CursorMode cursor_mode_ = ScreenCastPortal::CursorMode::kMetadata;
 
   PersistMode persist_mode_ = ScreenCastPortal::PersistMode::kDoNotPersist;
 

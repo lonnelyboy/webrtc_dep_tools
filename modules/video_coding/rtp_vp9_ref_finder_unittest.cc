@@ -8,12 +8,11 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "modules/video_coding/rtp_vp9_ref_finder.h"
-
 #include <utility>
 #include <vector>
 
-#include "modules/rtp_rtcp/source/frame_object.h"
+#include "modules/video_coding/frame_object.h"
+#include "modules/video_coding/rtp_vp9_ref_finder.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
 

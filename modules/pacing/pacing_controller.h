@@ -72,14 +72,9 @@ class PacingController {
   // order to send a keep-alive packet so we don't get stuck in a bad state due
   // to lack of feedback.
   static const TimeDelta kPausedProcessInterval;
-  // The default minimum time that should elapse calls to `ProcessPackets()`.
+
   static const TimeDelta kMinSleepTime;
-  // When padding should be generated, add packets to the buffer with a size
-  // corresponding to this duration times the current padding rate.
-  static const TimeDelta kTargetPaddingDuration;
-  // The maximum time that the pacer can use when "replaying" passed time where
-  // padding should have been generated.
-  static const TimeDelta kMaxPaddingReplayDuration;
+
   // Allow probes to be processed slightly ahead of inteded send time. Currently
   // set to 1ms as this is intended to allow times be rounded down to the
   // nearest millisecond.
@@ -95,6 +90,8 @@ class PacingController {
   // it's time to send.
   void EnqueuePacket(std::unique_ptr<RtpPacketToSend> packet);
 
+  // ABSL_DEPRECATED("Use CreateProbeClusters instead")
+  void CreateProbeCluster(DataRate bitrate, int cluster_id);
   void CreateProbeClusters(
       rtc::ArrayView<const ProbeClusterConfig> probe_cluster_configs);
 
@@ -159,14 +156,6 @@ class PacingController {
 
   bool IsProbing() const;
 
-  // Note: Intended for debugging purposes only, will be removed.
-  // Sets the number of iterations of the main loop in `ProcessPackets()` that
-  // is considered erroneous to exceed.
-  void SetCircuitBreakerThreshold(int num_iterations);
-
-  // Remove any pending packets matching this SSRC from the packet queue.
-  void RemovePacketsForSsrc(uint32_t ssrc);
-
  private:
   TimeDelta UpdateTimeAndGetElapsed(Timestamp now);
   bool ShouldSendKeepalive(Timestamp now) const;
@@ -206,6 +195,7 @@ class PacingController {
   const bool ignore_transport_overhead_;
   const bool fast_retransmissions_;
 
+  TimeDelta min_packet_limit_;
   DataSize transport_overhead_per_packet_;
   TimeDelta send_burst_interval_;
 
@@ -242,8 +232,6 @@ class PacingController {
   TimeDelta queue_time_limit_;
   bool account_for_audio_;
   bool include_overhead_;
-
-  int circuit_breaker_threshold_;
 };
 }  // namespace webrtc
 

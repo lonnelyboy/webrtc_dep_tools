@@ -14,10 +14,8 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "absl/types/optional.h"
-#include "api/numerics/samples_stats_counter.h"
 #include "api/units/data_size.h"
 #include "api/units/timestamp.h"
 #include "api/video/video_frame.h"
@@ -64,12 +62,9 @@ struct FrameStats {
   VideoFrameType pre_decoded_frame_type = VideoFrameType::kEmptyFrame;
   DataSize pre_decoded_image_size = DataSize::Bytes(0);
   uint32_t target_encode_bitrate = 0;
-  // Sender side qp values per spatial layer. In case when spatial layer is not
-  // set for `webrtc::EncodedImage`, 0 is used as default.
-  std::map<int, SamplesStatsCounter> spatial_layers_qp;
 
-  absl::optional<int> decoded_frame_width = absl::nullopt;
-  absl::optional<int> decoded_frame_height = absl::nullopt;
+  absl::optional<int> rendered_frame_width = absl::nullopt;
+  absl::optional<int> rendered_frame_height = absl::nullopt;
 
   // Can be not set if frame was dropped by encoder.
   absl::optional<StreamCodecInfo> used_encoder = absl::nullopt;

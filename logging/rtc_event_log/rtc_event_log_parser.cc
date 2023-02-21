@@ -32,6 +32,7 @@
 #include "logging/rtc_event_log/events/logged_rtp_rtcp.h"
 #include "logging/rtc_event_log/rtc_event_processor.h"
 #include "modules/audio_coding/audio_network_adaptor/include/audio_network_adaptor.h"
+#include "modules/include/module_common_types_public.h"
 #include "modules/rtp_rtcp/include/rtp_cvo.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"
 #include "modules/rtp_rtcp/source/byte_io.h"
@@ -41,7 +42,7 @@
 #include "rtc_base/copy_on_write_buffer.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/numerics/safe_conversions.h"
-#include "rtc_base/numerics/sequence_number_unwrapper.h"
+#include "rtc_base/numerics/sequence_number_util.h"
 #include "rtc_base/protobuf_utils.h"
 #include "rtc_base/system/file_wrapper.h"
 
@@ -1086,7 +1087,6 @@ void ParsedRtcEventLog::Clear() {
   start_log_events_.clear();
   stop_log_events_.clear();
   audio_playout_events_.clear();
-  neteq_set_minimum_delay_events_.clear();
   audio_network_adaptation_events_.clear();
   bwe_probe_cluster_created_events_.clear();
   bwe_probe_failure_events_.clear();
@@ -1235,10 +1235,6 @@ ParsedRtcEventLog::ParseStatus ParsedRtcEventLog::ParseStream(
   for (const auto& audio_stream : audio_playout_events()) {
     // Audio playout events are grouped by SSRC.
     StoreFirstAndLastTimestamp(audio_stream.second);
-  }
-  for (const auto& set_minimum_delay : neteq_set_minimum_delay_events()) {
-    // NetEq SetMinimumDelay grouped by SSRC.
-    StoreFirstAndLastTimestamp(set_minimum_delay.second);
   }
   StoreFirstAndLastTimestamp(audio_network_adaptation_events());
   StoreFirstAndLastTimestamp(bwe_probe_cluster_created_events());
@@ -2293,7 +2289,7 @@ std::vector<LoggedPacketInfo> ParsedRtcEventLog::GetPacketInfos(
   std::map<int64_t, size_t> indices;
   uint16_t current_overhead = kDefaultOverhead;
   Timestamp last_log_time = Timestamp::Zero();
-  RtpSequenceNumberUnwrapper seq_num_unwrapper;
+  SequenceNumberUnwrapper seq_num_unwrapper;
 
   auto advance_time = [&](Timestamp new_log_time) {
     if (overhead_iter != overheads.end() &&
@@ -2305,7 +2301,7 @@ std::vector<LoggedPacketInfo> ParsedRtcEventLog::GetPacketInfos(
     // therefore we don't want to match up sequence numbers as we might have had
     // a wraparound.
     if (new_log_time - last_log_time > TimeDelta::Seconds(30)) {
-      seq_num_unwrapper.Reset();
+      seq_num_unwrapper = SequenceNumberUnwrapper();
       indices.clear();
     }
     RTC_DCHECK_GE(new_log_time, last_log_time);
@@ -2370,26 +2366,28 @@ std::vector<LoggedPacketInfo> ParsedRtcEventLog::GetPacketInfos(
         last_feedback_base_time = feedback.BaseTime();
 
         std::vector<LoggedPacketInfo*> packet_feedbacks;
-        packet_feedbacks.reserve(feedback.GetPacketStatusCount());
+        packet_feedbacks.reserve(feedback.GetAllPackets().size());
+        Timestamp receive_timestamp = feedback_base_time;
         std::vector<int64_t> unknown_seq_nums;
-        feedback.ForAllPackets([&](uint16_t sequence_number,
-                                   TimeDelta delta_since_base) {
-          int64_t unwrapped_seq_num = seq_num_unwrapper.Unwrap(sequence_number);
+        for (const auto& packet : feedback.GetAllPackets()) {
+          int64_t unwrapped_seq_num =
+              seq_num_unwrapper.Unwrap(packet.sequence_number());
           auto it = indices.find(unwrapped_seq_num);
           if (it == indices.end()) {
             unknown_seq_nums.push_back(unwrapped_seq_num);
-            return;
+            continue;
           }
           LoggedPacketInfo* sent = &packets[it->second];
           if (log_feedback_time - sent->log_packet_time >
               TimeDelta::Seconds(60)) {
             RTC_LOG(LS_WARNING)
                 << "Received very late feedback, possibly due to wraparound.";
-            return;
+            continue;
           }
-          if (delta_since_base.IsFinite()) {
+          if (packet.received()) {
+            receive_timestamp += packet.delta();
             if (sent->reported_recv_time.IsInfinite()) {
-              sent->reported_recv_time = feedback_base_time + delta_since_base;
+              sent->reported_recv_time = receive_timestamp;
               sent->log_feedback_time = log_feedback_time;
             }
           } else {
@@ -2400,7 +2398,7 @@ std::vector<LoggedPacketInfo> ParsedRtcEventLog::GetPacketInfos(
             }
           }
           packet_feedbacks.push_back(sent);
-        });
+        }
         if (!unknown_seq_nums.empty()) {
           RTC_LOG(LS_WARNING)
               << "Received feedback for unknown packets: "
@@ -2525,8 +2523,7 @@ ParsedRtcEventLog::ParseStatus ParsedRtcEventLog::StoreParsedNewFormatEvent(
           stream.generic_packets_sent_size() +
           stream.generic_packets_received_size() +
           stream.generic_acks_received_size() +
-          stream.frame_decoded_events_size() +
-          stream.neteq_set_minimum_delay_size(),
+          stream.frame_decoded_events_size(),
       1u);
 
   if (stream.incoming_rtp_packets_size() == 1) {
@@ -2586,8 +2583,6 @@ ParsedRtcEventLog::ParseStatus ParsedRtcEventLog::StoreParsedNewFormatEvent(
     return StoreGenericAckReceivedEvent(stream.generic_acks_received(0));
   } else if (stream.frame_decoded_events_size() == 1) {
     return StoreFrameDecodedEvents(stream.frame_decoded_events(0));
-  } else if (stream.neteq_set_minimum_delay_size() == 1) {
-    return StoreNetEqSetMinimumDelay(stream.neteq_set_minimum_delay(0));
   } else {
     RTC_DCHECK_NOTREACHED();
     return ParseStatus::Success();
@@ -2729,65 +2724,6 @@ ParsedRtcEventLog::ParseStatus ParsedRtcEventLog::StoreAudioPlayoutEvent(
     audio_playout_events_[local_ssrc].emplace_back(
         Timestamp::Millis(timestamp_ms), local_ssrc);
   }
-  return ParseStatus::Success();
-}
-
-ParsedRtcEventLog::ParseStatus ParsedRtcEventLog::StoreNetEqSetMinimumDelay(
-    const rtclog2::NetEqSetMinimumDelay& proto) {
-  RTC_PARSE_CHECK_OR_RETURN(proto.has_timestamp_ms());
-  RTC_PARSE_CHECK_OR_RETURN(proto.has_remote_ssrc());
-  RTC_PARSE_CHECK_OR_RETURN(proto.has_minimum_delay_ms());
-
-  // Base event
-  neteq_set_minimum_delay_events_[proto.remote_ssrc()].emplace_back(
-      Timestamp::Millis(proto.timestamp_ms()), proto.remote_ssrc(),
-      static_cast<int>(proto.minimum_delay_ms()));
-
-  const size_t number_of_deltas =
-      proto.has_number_of_deltas() ? proto.number_of_deltas() : 0u;
-  if (number_of_deltas == 0) {
-    return ParseStatus::Success();
-  }
-
-  // timestamp_ms
-  std::vector<absl::optional<uint64_t>> timestamp_ms_values =
-      DecodeDeltas(proto.timestamp_ms_deltas(),
-                   ToUnsigned(proto.timestamp_ms()), number_of_deltas);
-  RTC_PARSE_CHECK_OR_RETURN_EQ(timestamp_ms_values.size(), number_of_deltas);
-
-  // remote_ssrc
-  std::vector<absl::optional<uint64_t>> remote_ssrc_values = DecodeDeltas(
-      proto.remote_ssrc_deltas(), proto.remote_ssrc(), number_of_deltas);
-  RTC_PARSE_CHECK_OR_RETURN_EQ(remote_ssrc_values.size(), number_of_deltas);
-
-  // minimum_delay_ms
-  std::vector<absl::optional<uint64_t>> minimum_delay_ms_values =
-      DecodeDeltas(proto.minimum_delay_ms_deltas(),
-                   ToUnsigned(proto.minimum_delay_ms()), number_of_deltas);
-  RTC_PARSE_CHECK_OR_RETURN_EQ(minimum_delay_ms_values.size(),
-                               number_of_deltas);
-
-  // Populate events from decoded deltas
-  for (size_t i = 0; i < number_of_deltas; ++i) {
-    RTC_PARSE_CHECK_OR_RETURN(timestamp_ms_values[i].has_value());
-    RTC_PARSE_CHECK_OR_RETURN(remote_ssrc_values[i].has_value());
-    RTC_PARSE_CHECK_OR_RETURN_LE(remote_ssrc_values[i].value(),
-                                 std::numeric_limits<uint32_t>::max());
-    RTC_PARSE_CHECK_OR_RETURN(minimum_delay_ms_values[i].has_value());
-
-    int64_t timestamp_ms;
-    RTC_PARSE_CHECK_OR_RETURN(
-        ToSigned(timestamp_ms_values[i].value(), &timestamp_ms));
-
-    const uint32_t remote_ssrc =
-        static_cast<uint32_t>(remote_ssrc_values[i].value());
-    int minimum_delay_ms;
-    RTC_PARSE_CHECK_OR_RETURN(
-        ToSigned(minimum_delay_ms_values[i].value(), &minimum_delay_ms));
-    neteq_set_minimum_delay_events_[remote_ssrc].emplace_back(
-        Timestamp::Millis(timestamp_ms), remote_ssrc, minimum_delay_ms);
-  }
-
   return ParseStatus::Success();
 }
 

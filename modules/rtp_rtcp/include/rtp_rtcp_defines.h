@@ -25,7 +25,6 @@
 #include "api/audio_codecs/audio_format.h"
 #include "api/rtp_headers.h"
 #include "api/transport/network_types.h"
-#include "api/units/time_delta.h"
 #include "modules/rtp_rtcp/source/rtcp_packet/remote_estimate.h"
 #include "system_wrappers/include/clock.h"
 
@@ -72,12 +71,9 @@ enum RTPExtensionType : int {
   kRtpExtensionRtpStreamId,
   kRtpExtensionRepairedRtpStreamId,
   kRtpExtensionMid,
-  kRtpExtensionGenericFrameDescriptor,
-  kRtpExtensionGenericFrameDescriptor00 [[deprecated]] =
-      kRtpExtensionGenericFrameDescriptor,
-  kRtpExtensionDependencyDescriptor,
-  kRtpExtensionGenericFrameDescriptor02 [[deprecated]] =
-      kRtpExtensionDependencyDescriptor,
+  kRtpExtensionGenericFrameDescriptor00,
+  kRtpExtensionGenericFrameDescriptor = kRtpExtensionGenericFrameDescriptor00,
+  kRtpExtensionGenericFrameDescriptor02,
   kRtpExtensionColorSpace,
   kRtpExtensionVideoFrameTrackingId,
   kRtpExtensionNumberOfExtensions  // Must be the last entity in the enum.
@@ -179,6 +175,17 @@ struct RtpState {
   bool ssrc_has_acked;
 };
 
+// Callback interface for packets recovered by FlexFEC or ULPFEC. In
+// the FlexFEC case, the implementation should be able to demultiplex
+// the recovered RTP packets based on SSRC.
+class RecoveredPacketReceiver {
+ public:
+  virtual void OnRecoveredPacket(const uint8_t* packet, size_t length) = 0;
+
+ protected:
+  virtual ~RecoveredPacketReceiver() = default;
+};
+
 class RtcpIntraFrameObserver {
  public:
   virtual ~RtcpIntraFrameObserver() {}
@@ -223,6 +230,9 @@ enum class RtpPacketMediaType : size_t {
 };
 
 struct RtpPacketSendInfo {
+ public:
+  RtpPacketSendInfo() = default;
+
   uint16_t transport_sequence_number = 0;
   absl::optional<uint32_t> media_ssrc;
   uint16_t rtp_sequence_number = 0;  // Only valid if `media_ssrc` is set.
@@ -441,10 +451,7 @@ struct RtpReceiveStats {
   // RTCReceivedRtpStreamStats dictionary, see
   // https://w3c.github.io/webrtc-stats/#receivedrtpstats-dict*
   int32_t packets_lost = 0;
-  // Interarrival jitter in samples.
   uint32_t jitter = 0;
-  // Interarrival jitter in time.
-  webrtc::TimeDelta interarrival_jitter = webrtc::TimeDelta::Zero();
 
   // Timestamp and counters exposed in RTCInboundRtpStreamStats, see
   // https://w3c.github.io/webrtc-stats/#inboundrtpstats-dict*

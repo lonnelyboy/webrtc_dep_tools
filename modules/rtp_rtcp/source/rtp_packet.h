@@ -34,14 +34,11 @@ class RtpPacket {
   // stored.
   RtpPacket();
   explicit RtpPacket(const ExtensionManager* extensions);
-  RtpPacket(const ExtensionManager* extensions, size_t capacity);
-
   RtpPacket(const RtpPacket&);
-  RtpPacket(RtpPacket&&);
-  RtpPacket& operator=(const RtpPacket&);
-  RtpPacket& operator=(RtpPacket&&);
-
+  RtpPacket(const ExtensionManager* extensions, size_t capacity);
   ~RtpPacket();
+
+  RtpPacket& operator=(const RtpPacket&) = default;
 
   // Parse and copy given buffer into Packet.
   // Does not require extension map to be registered (map is only required to
@@ -55,9 +52,6 @@ class RtpPacket {
 
   // Maps extensions id to their types.
   void IdentifyExtensions(ExtensionManager extensions);
-
-  // Returns the extension map used for identifying extensions in this packet.
-  const ExtensionManager& extension_manager() const { return extensions_; }
 
   // Header.
   bool Marker() const { return marker_; }
@@ -138,9 +132,6 @@ class RtpPacket {
 
   template <typename Extension, typename... Values>
   bool SetExtension(const Values&...);
-
-  template <typename Extension>
-  bool SetRawExtension(rtc::ArrayView<const uint8_t> data);
 
   template <typename Extension>
   bool ReserveExtension();
@@ -256,17 +247,6 @@ bool RtpPacket::SetExtension(const Values&... values) {
   if (buffer.empty())
     return false;
   return Extension::Write(buffer, values...);
-}
-
-template <typename Extension>
-bool RtpPacket::SetRawExtension(rtc::ArrayView<const uint8_t> data) {
-  rtc::ArrayView<uint8_t> buffer =
-      AllocateExtension(Extension::kId, data.size());
-  if (buffer.empty()) {
-    return false;
-  }
-  std::memcpy(buffer.data(), data.data(), data.size());
-  return true;
 }
 
 template <typename Extension>

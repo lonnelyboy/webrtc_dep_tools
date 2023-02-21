@@ -18,7 +18,7 @@
 
 namespace webrtc {
 
-class MockDataChannelInterface
+class MockDataChannelInterface final
     : public rtc::RefCountedObject<webrtc::DataChannelInterface> {
  public:
   static rtc::scoped_refptr<MockDataChannelInterface> Create() {

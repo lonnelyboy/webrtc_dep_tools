@@ -91,13 +91,11 @@ std::vector<const std::string*> GetStatsReferencedIds(const RTCStats& stats) {
     const auto& local_or_remote_candidate =
         static_cast<const RTCIceCandidateStats&>(stats);
     AddIdIfDefined(local_or_remote_candidate.transport_id, &neighbor_ids);
-  } else if (type == DEPRECATED_RTCMediaStreamStats::kType) {
-    const auto& stream =
-        static_cast<const DEPRECATED_RTCMediaStreamStats&>(stats);
+  } else if (type == RTCMediaStreamStats::kType) {
+    const auto& stream = static_cast<const RTCMediaStreamStats&>(stats);
     AddIdsIfDefined(stream.track_ids, &neighbor_ids);
-  } else if (type == DEPRECATED_RTCMediaStreamTrackStats::kType) {
-    const auto& track =
-        static_cast<const DEPRECATED_RTCMediaStreamTrackStats&>(stats);
+  } else if (type == RTCMediaStreamTrackStats::kType) {
+    const auto& track = static_cast<const RTCMediaStreamTrackStats&>(stats);
     AddIdIfDefined(track.media_source_id, &neighbor_ids);
   } else if (type == RTCPeerConnectionStats::kType) {
     // RTCPeerConnectionStats does not have any neighbor references.
@@ -108,7 +106,6 @@ std::vector<const std::string*> GetStatsReferencedIds(const RTCStats& stats) {
     AddIdIfDefined(inbound_rtp.track_id, &neighbor_ids);
     AddIdIfDefined(inbound_rtp.transport_id, &neighbor_ids);
     AddIdIfDefined(inbound_rtp.codec_id, &neighbor_ids);
-    AddIdIfDefined(inbound_rtp.playout_id, &neighbor_ids);
   } else if (type == RTCOutboundRTPStreamStats::kType) {
     const auto& outbound_rtp =
         static_cast<const RTCOutboundRTPStreamStats&>(stats);
@@ -136,13 +133,12 @@ std::vector<const std::string*> GetStatsReferencedIds(const RTCStats& stats) {
              type == RTCVideoSourceStats::kType) {
     // RTC[Audio/Video]SourceStats does not have any neighbor references.
   } else if (type == RTCTransportStats::kType) {
+    // RTCTransportStats does not have any neighbor references.
     const auto& transport = static_cast<const RTCTransportStats&>(stats);
     AddIdIfDefined(transport.rtcp_transport_stats_id, &neighbor_ids);
     AddIdIfDefined(transport.selected_candidate_pair_id, &neighbor_ids);
     AddIdIfDefined(transport.local_certificate_id, &neighbor_ids);
     AddIdIfDefined(transport.remote_certificate_id, &neighbor_ids);
-  } else if (type == RTCAudioPlayoutStats::kType) {
-    // RTCAudioPlayoutStats does not have any neighbor references.
   } else {
     RTC_DCHECK_NOTREACHED() << "Unrecognized type: " << type;
   }

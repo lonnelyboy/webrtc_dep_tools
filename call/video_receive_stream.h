@@ -11,7 +11,6 @@
 #ifndef CALL_VIDEO_RECEIVE_STREAM_H_
 #define CALL_VIDEO_RECEIVE_STREAM_H_
 
-#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
@@ -34,7 +33,6 @@
 #include "common_video/frame_counts.h"
 #include "modules/rtp_rtcp/include/rtcp_statistics.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"
-#include "rtc_base/checks.h"
 
 namespace webrtc {
 
@@ -89,7 +87,6 @@ class VideoReceiveStreamInterface : public MediaReceiveStreamInterface {
 
     // Decoder stats.
     std::string decoder_implementation_name = "unknown";
-    absl::optional<bool> power_efficient_decoder;
     FrameCounts frame_counts;
     int decode_ms = 0;
     int max_decode_ms = 0;
@@ -134,6 +131,8 @@ class VideoReceiveStreamInterface : public MediaReceiveStreamInterface {
     uint32_t pause_count = 0;
     uint32_t total_freezes_duration_ms = 0;
     uint32_t total_pauses_duration_ms = 0;
+    uint32_t total_frames_duration_ms = 0;
+    double sum_squared_frame_durations = 0.0;
 
     VideoContentType content_type = VideoContentType::UNSPECIFIED;
 
@@ -311,8 +310,6 @@ class VideoReceiveStreamInterface : public MediaReceiveStreamInterface {
 
   virtual void SetAssociatedPayloadTypes(
       std::map<int, int> associated_payload_types) = 0;
-
-  virtual void UpdateRtxSsrc(uint32_t ssrc) = 0;
 
  protected:
   virtual ~VideoReceiveStreamInterface() {}

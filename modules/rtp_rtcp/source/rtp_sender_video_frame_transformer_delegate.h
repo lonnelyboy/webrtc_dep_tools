@@ -12,7 +12,6 @@
 #define MODULES_RTP_RTCP_SOURCE_RTP_SENDER_VIDEO_FRAME_TRANSFORMER_DELEGATE_H_
 
 #include <memory>
-#include <vector>
 
 #include "api/frame_transformer_interface.h"
 #include "api/scoped_refptr.h"
@@ -35,7 +34,6 @@ class RTPSenderVideoFrameTransformerDelegate : public TransformedFrameCallback {
       RTPSenderVideo* sender,
       rtc::scoped_refptr<FrameTransformerInterface> frame_transformer,
       uint32_t ssrc,
-      std::vector<uint32_t> csrcs,
       TaskQueueFactory* send_transport_queue);
 
   void Init();
@@ -55,7 +53,7 @@ class RTPSenderVideoFrameTransformerDelegate : public TransformedFrameCallback {
 
   // Delegates the call to RTPSendVideo::SendVideo on the `encoder_queue_`.
   void SendVideo(std::unique_ptr<TransformableFrameInterface> frame) const
-      RTC_RUN_ON(transformation_queue_);
+      RTC_RUN_ON(encoder_queue_);
 
   // Delegates the call to RTPSendVideo::SetVideoStructureAfterTransformation
   // under `sender_lock_`.
@@ -76,21 +74,16 @@ class RTPSenderVideoFrameTransformerDelegate : public TransformedFrameCallback {
   ~RTPSenderVideoFrameTransformerDelegate() override = default;
 
  private:
-  void EnsureEncoderQueueCreated();
-
   mutable Mutex sender_lock_;
   RTPSenderVideo* sender_ RTC_GUARDED_BY(sender_lock_);
   rtc::scoped_refptr<FrameTransformerInterface> frame_transformer_;
   const uint32_t ssrc_;
-  std::vector<uint32_t> csrcs_;
+  TaskQueueBase* encoder_queue_ = nullptr;
+  TaskQueueFactory* task_queue_factory_;
   // Used when the encoded frames arrives without a current task queue. This can
   // happen if a hardware encoder was used.
-  std::unique_ptr<TaskQueueBase, TaskQueueDeleter> transformation_queue_;
+  std::unique_ptr<TaskQueueBase, TaskQueueDeleter> owned_encoder_queue_;
 };
-
-// Method to support cloning a Sender frame from another frame
-std::unique_ptr<TransformableVideoFrameInterface> CloneSenderVideoFrame(
-    TransformableVideoFrameInterface* original);
 
 }  // namespace webrtc
 

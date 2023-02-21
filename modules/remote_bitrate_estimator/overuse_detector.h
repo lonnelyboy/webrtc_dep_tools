@@ -17,6 +17,9 @@
 
 namespace webrtc {
 
+bool AdaptiveThresholdExperimentIsDisabled(
+    const FieldTrialsView& key_value_config);
+
 class OveruseDetector {
  public:
   explicit OveruseDetector(const FieldTrialsView* key_value_config);
@@ -43,9 +46,10 @@ class OveruseDetector {
   void UpdateThreshold(double modified_offset, int64_t now_ms);
   void InitializeExperiment(const FieldTrialsView& key_value_config);
 
-  const double k_up_;
-  const double k_down_;
-  const double overusing_time_threshold_;
+  bool in_experiment_;
+  double k_up_;
+  double k_down_;
+  double overusing_time_threshold_;
   double threshold_;
   int64_t last_update_ms_;
   double prev_offset_;

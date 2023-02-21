@@ -9,26 +9,23 @@
  *
  */
 
-#include <memory>
 #ifdef RTC_ENABLE_VP9
+
+#include "modules/video_coding/codecs/vp9/libvpx_vp9_encoder.h"
 
 #include <algorithm>
 #include <limits>
-#include <tuple>
 #include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/match.h"
-#include "absl/types/optional.h"
 #include "api/video/color_space.h"
 #include "api/video/i010_buffer.h"
-#include "api/video_codecs/scalability_mode.h"
 #include "common_video/include/video_frame_buffer.h"
 #include "common_video/libyuv/include/webrtc_libyuv.h"
 #include "modules/rtp_rtcp/include/rtp_rtcp_defines.h"
-#include "modules/video_coding/codecs/vp9/libvpx_vp9_encoder.h"
 #include "modules/video_coding/svc/create_scalability_structure.h"
 #include "modules/video_coding/svc/scalability_mode_util.h"
 #include "modules/video_coding/svc/scalable_video_controller.h"
@@ -82,17 +79,13 @@ std::pair<size_t, size_t> GetActiveLayers(
   return {0, 0};
 }
 
-using Vp9ScalabilityStructure =
-    std::tuple<std::unique_ptr<ScalableVideoController>, ScalabilityMode>;
-absl::optional<Vp9ScalabilityStructure> CreateVp9ScalabilityStructure(
+std::unique_ptr<ScalableVideoController> CreateVp9ScalabilityStructure(
     const VideoCodec& codec) {
   int num_spatial_layers = codec.VP9().numberOfSpatialLayers;
   int num_temporal_layers =
       std::max(1, int{codec.VP9().numberOfTemporalLayers});
   if (num_spatial_layers == 1 && num_temporal_layers == 1) {
-    return absl::make_optional<Vp9ScalabilityStructure>(
-        std::make_unique<ScalableVideoControllerNoLayering>(),
-        ScalabilityMode::kL1T1);
+    return std::make_unique<ScalableVideoControllerNoLayering>();
   }
 
   char name[20];
@@ -100,7 +93,7 @@ absl::optional<Vp9ScalabilityStructure> CreateVp9ScalabilityStructure(
   if (codec.mode == VideoCodecMode::kScreensharing) {
     // TODO(bugs.webrtc.org/11999): Compose names of the structures when they
     // are implemented.
-    return absl::nullopt;
+    return nullptr;
   } else if (codec.VP9().interLayerPred == InterLayerPredMode::kOn ||
              num_spatial_layers == 1) {
     ss << "L" << num_spatial_layers << "T" << num_temporal_layers;
@@ -117,7 +110,7 @@ absl::optional<Vp9ScalabilityStructure> CreateVp9ScalabilityStructure(
         codec.height != codec.spatialLayers[num_spatial_layers - 1].height) {
       RTC_LOG(LS_WARNING)
           << "Top layer resolution expected to match overall resolution";
-      return absl::nullopt;
+      return nullptr;
     }
     // Check if the ratio is one of the supported.
     int numerator;
@@ -135,7 +128,7 @@ absl::optional<Vp9ScalabilityStructure> CreateVp9ScalabilityStructure(
       RTC_LOG(LS_WARNING) << "Unsupported scalability ratio "
                           << codec.spatialLayers[0].width << ":"
                           << codec.spatialLayers[1].width;
-      return absl::nullopt;
+      return nullptr;
     }
     // Validate ratio is consistent for all spatial layer transitions.
     for (int sid = 1; sid < num_spatial_layers; ++sid) {
@@ -145,7 +138,7 @@ absl::optional<Vp9ScalabilityStructure> CreateVp9ScalabilityStructure(
               codec.spatialLayers[sid - 1].height * denominator) {
         RTC_LOG(LS_WARNING) << "Inconsistent scalability ratio " << numerator
                             << ":" << denominator;
-        return absl::nullopt;
+        return nullptr;
       }
     }
   }
@@ -154,7 +147,7 @@ absl::optional<Vp9ScalabilityStructure> CreateVp9ScalabilityStructure(
       ScalabilityModeFromString(name);
   if (!scalability_mode.has_value()) {
     RTC_LOG(LS_WARNING) << "Invalid scalability mode " << name;
-    return absl::nullopt;
+    return nullptr;
   }
   auto scalability_structure_controller =
       CreateScalabilityStructure(*scalability_mode);
@@ -163,8 +156,7 @@ absl::optional<Vp9ScalabilityStructure> CreateVp9ScalabilityStructure(
   } else {
     RTC_LOG(LS_INFO) << "Created scalability structure " << name;
   }
-  return absl::make_optional<Vp9ScalabilityStructure>(
-      std::move(scalability_structure_controller), *scalability_mode);
+  return scalability_structure_controller;
 }
 
 vpx_svc_ref_frame_config_t Vp9References(
@@ -578,12 +570,12 @@ int LibvpxVp9Encoder::InitEncode(const VideoCodec* inst,
   force_key_frame_ = true;
   pics_since_key_ = 0;
 
-  scalability_mode_ = inst->GetScalabilityMode();
-  if (scalability_mode_.has_value()) {
+  absl::optional<ScalabilityMode> scalability_mode = inst->GetScalabilityMode();
+  if (scalability_mode.has_value()) {
     // Use settings from `ScalabilityMode` identifier.
     RTC_LOG(LS_INFO) << "Create scalability structure "
-                     << ScalabilityModeToString(*scalability_mode_);
-    svc_controller_ = CreateScalabilityStructure(*scalability_mode_);
+                     << ScalabilityModeToString(*scalability_mode);
+    svc_controller_ = CreateScalabilityStructure(*scalability_mode);
     if (!svc_controller_) {
       RTC_LOG(LS_WARNING) << "Failed to create scalability structure.";
       return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
@@ -592,7 +584,7 @@ int LibvpxVp9Encoder::InitEncode(const VideoCodec* inst,
         svc_controller_->StreamConfig();
     num_spatial_layers_ = info.num_spatial_layers;
     num_temporal_layers_ = info.num_temporal_layers;
-    inter_layer_pred_ = ScalabilityModeToInterLayerPredMode(*scalability_mode_);
+    inter_layer_pred_ = ScalabilityModeToInterLayerPredMode(*scalability_mode);
   } else {
     num_spatial_layers_ = inst->VP9().numberOfSpatialLayers;
     RTC_DCHECK_GT(num_spatial_layers_, 0);
@@ -601,14 +593,7 @@ int LibvpxVp9Encoder::InitEncode(const VideoCodec* inst,
       num_temporal_layers_ = 1;
     }
     inter_layer_pred_ = inst->VP9().interLayerPred;
-    auto vp9_scalability = CreateVp9ScalabilityStructure(*inst);
-    if (vp9_scalability.has_value()) {
-      std::tie(svc_controller_, scalability_mode_) =
-          std::move(vp9_scalability.value());
-    } else {
-      svc_controller_ = nullptr;
-      scalability_mode_ = absl::nullopt;
-    }
+    svc_controller_ = CreateVp9ScalabilityStructure(*inst);
   }
 
   framerate_controller_ = std::vector<FramerateControllerDeprecated>(
@@ -1458,7 +1443,6 @@ bool LibvpxVp9Encoder::PopulateCodecSpecific(CodecSpecificInfo* codec_specific,
       }
     }
   }
-  codec_specific->scalability_mode = scalability_mode_;
   return true;
 }
 

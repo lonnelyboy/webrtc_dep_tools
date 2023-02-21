@@ -11,6 +11,7 @@
 #include "test/explicit_key_value_config.h"
 
 #include "absl/strings/string_view.h"
+#include "api/field_trials_view.h"
 #include "rtc_base/checks.h"
 
 namespace webrtc {
@@ -45,7 +46,7 @@ ExplicitKeyValueConfig::ExplicitKeyValueConfig(absl::string_view s) {
   RTC_CHECK_EQ(field_start, s.size());
 }
 
-std::string ExplicitKeyValueConfig::GetValue(absl::string_view key) const {
+std::string ExplicitKeyValueConfig::Lookup(absl::string_view key) const {
   auto it = key_value_map_.find(key);
   if (it != key_value_map_.end())
     return it->second;

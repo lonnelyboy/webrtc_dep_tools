@@ -16,8 +16,6 @@
 
 #include "api/call/audio_sink.h"
 #include "media/base/media_channel.h"
-#include "media/base/media_channel_impl.h"
-#include "modules/rtp_rtcp/source/rtp_packet_received.h"
 #include "rtc_base/gunit.h"
 #include "test/gmock.h"
 #include "test/gtest.h"
@@ -29,15 +27,12 @@ namespace cricket {
 class MockVoiceMediaChannel : public VoiceMediaChannel {
  public:
   explicit MockVoiceMediaChannel(webrtc::TaskQueueBase* network_thread)
-      : VoiceMediaChannel(MediaChannel::Role::kBoth, network_thread) {}
+      : VoiceMediaChannel(network_thread) {}
 
-  MOCK_METHOD(void,
-              SetInterface,
-              (MediaChannelNetworkInterface * iface),
-              (override));
+  MOCK_METHOD(void, SetInterface, (NetworkInterface * iface), (override));
   MOCK_METHOD(void,
               OnPacketReceived,
-              (const webrtc::RtpPacketReceived& packet),
+              (rtc::CopyOnWriteBuffer packet, int64_t packet_time_us),
               (override));
   MOCK_METHOD(void,
               OnPacketSent,
@@ -49,19 +44,11 @@ class MockVoiceMediaChannel : public VoiceMediaChannel {
               (absl::string_view transport_name,
                const rtc::NetworkRoute& network_route),
               (override));
-  MOCK_METHOD(void, SetExtmapAllowMixed, (bool extmap_allow_mixed), (override));
-  MOCK_METHOD(bool, ExtmapAllowMixed, (), (const, override));
-  MOCK_METHOD(bool, HasNetworkInterface, (), (const, override));
   MOCK_METHOD(bool, AddSendStream, (const StreamParams& sp), (override));
   MOCK_METHOD(bool, RemoveSendStream, (uint32_t ssrc), (override));
   MOCK_METHOD(bool, AddRecvStream, (const StreamParams& sp), (override));
   MOCK_METHOD(bool, RemoveRecvStream, (uint32_t ssrc), (override));
   MOCK_METHOD(void, ResetUnsignaledRecvStream, (), (override));
-  MOCK_METHOD(absl::optional<uint32_t>,
-              GetUnsignaledSsrc,
-              (),
-              (const, override));
-  MOCK_METHOD(bool, SetLocalSsrc, (const StreamParams& sp), (override));
   MOCK_METHOD(void, OnDemuxerCriteriaUpdatePending, (), (override));
   MOCK_METHOD(void, OnDemuxerCriteriaUpdateComplete, (), (override));
   MOCK_METHOD(int, GetRtpSendTimeExtnId, (), (const, override));
@@ -77,15 +64,14 @@ class MockVoiceMediaChannel : public VoiceMediaChannel {
       (uint32_t ssrc,
        rtc::scoped_refptr<webrtc::FrameDecryptorInterface> frame_decryptor),
       (override));
+  MOCK_METHOD(void, SetVideoCodecSwitchingEnabled, (bool enabled), (override));
   MOCK_METHOD(webrtc::RtpParameters,
               GetRtpSendParameters,
               (uint32_t ssrc),
               (const, override));
   MOCK_METHOD(webrtc::RTCError,
               SetRtpSendParameters,
-              (uint32_t ssrc,
-               const webrtc::RtpParameters& parameters,
-               webrtc::SetParametersCallback callback),
+              (uint32_t ssrc, const webrtc::RtpParameters& parameters),
               (override));
   MOCK_METHOD(
       void,
@@ -135,10 +121,9 @@ class MockVoiceMediaChannel : public VoiceMediaChannel {
               InsertDtmf,
               (uint32_t ssrc, int event, int duration),
               (override));
-  MOCK_METHOD(bool, GetSendStats, (VoiceMediaSendInfo * info), (override));
   MOCK_METHOD(bool,
-              GetReceiveStats,
-              (VoiceMediaReceiveInfo * info, bool get_and_clear_legacy_stats),
+              GetStats,
+              (VoiceMediaInfo * info, bool get_and_clear_legacy_stats),
               (override));
   MOCK_METHOD(void,
               SetRawAudioSink,
@@ -161,10 +146,6 @@ class MockVoiceMediaChannel : public VoiceMediaChannel {
               GetBaseMinimumPlayoutDelayMs,
               (uint32_t ssrc),
               (const, override));
-  MOCK_METHOD(bool, SenderNackEnabled, (), (const, override));
-  MOCK_METHOD(bool, SenderNonSenderRttEnabled, (), (const, override));
-  MOCK_METHOD(void, SetReceiveNackEnabled, (bool enabled), (override));
-  MOCK_METHOD(void, SetReceiveNonSenderRttEnabled, (bool enabled), (override));
 };
 }  // namespace cricket
 

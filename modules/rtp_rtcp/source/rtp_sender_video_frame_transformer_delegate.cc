@@ -31,21 +31,19 @@ class TransformableVideoSenderFrame : public TransformableVideoFrameInterface {
       absl::optional<VideoCodecType> codec_type,
       uint32_t rtp_timestamp,
       absl::optional<int64_t> expected_retransmission_time_ms,
-      uint32_t ssrc,
-      std::vector<uint32_t> csrcs)
+      uint32_t ssrc)
       : encoded_data_(encoded_image.GetEncodedData()),
         header_(video_header),
-        metadata_(header_.GetAsMetadata()),
+        metadata_(header_),
         frame_type_(encoded_image._frameType),
         payload_type_(payload_type),
         codec_type_(codec_type),
         timestamp_(rtp_timestamp),
         capture_time_ms_(encoded_image.capture_time_ms_),
-        expected_retransmission_time_ms_(expected_retransmission_time_ms) {
+        expected_retransmission_time_ms_(expected_retransmission_time_ms),
+        ssrc_(ssrc) {
     RTC_DCHECK_GE(payload_type_, 0);
     RTC_DCHECK_LE(payload_type_, 127);
-    metadata_.SetSsrc(ssrc);
-    metadata_.SetCsrcs(std::move(csrcs));
   }
 
   ~TransformableVideoSenderFrame() override = default;
@@ -60,7 +58,7 @@ class TransformableVideoSenderFrame : public TransformableVideoFrameInterface {
   }
 
   uint32_t GetTimestamp() const override { return timestamp_; }
-  uint32_t GetSsrc() const override { return metadata_.GetSsrc(); }
+  uint32_t GetSsrc() const override { return ssrc_; }
 
   bool IsKeyFrame() const override {
     return frame_type_ == VideoFrameType::kVideoFrameKey;
@@ -71,17 +69,6 @@ class TransformableVideoSenderFrame : public TransformableVideoFrameInterface {
   }
 
   const VideoFrameMetadata& GetMetadata() const override { return metadata_; }
-  void SetMetadata(const VideoFrameMetadata& metadata) override {
-    header_.SetFromMetadata(metadata);
-    uint32_t ssrc = metadata.GetSsrc();
-    std::vector<uint32_t> csrcs = metadata.GetCsrcs();
-
-    // We have to keep a local copy because GetMetadata() has to return a
-    // reference.
-    metadata_ = header_.GetAsMetadata();
-    metadata_.SetSsrc(ssrc);
-    metadata_.SetCsrcs(std::move(csrcs));
-  }
 
   const RTPVideoHeader& GetHeader() const { return header_; }
   uint8_t GetPayloadType() const override { return payload_type_; }
@@ -96,18 +83,15 @@ class TransformableVideoSenderFrame : public TransformableVideoFrameInterface {
 
  private:
   rtc::scoped_refptr<EncodedImageBufferInterface> encoded_data_;
-  RTPVideoHeader header_;
-  // This is a copy of `header_.GetAsMetadata()`, only needed because the
-  // interface says GetMetadata() must return a const ref rather than a value.
-  // TODO(crbug.com/webrtc/14709): Change the interface and delete this variable
-  // to reduce risk of it getting out-of-sync with `header_.GetAsMetadata()`.
-  VideoFrameMetadata metadata_;
+  const RTPVideoHeader header_;
+  const VideoFrameMetadata metadata_;
   const VideoFrameType frame_type_;
   const uint8_t payload_type_;
   const absl::optional<VideoCodecType> codec_type_ = absl::nullopt;
   const uint32_t timestamp_;
   const int64_t capture_time_ms_;
   const absl::optional<int64_t> expected_retransmission_time_ms_;
+  const uint32_t ssrc_;
 };
 }  // namespace
 
@@ -115,15 +99,13 @@ RTPSenderVideoFrameTransformerDelegate::RTPSenderVideoFrameTransformerDelegate(
     RTPSenderVideo* sender,
     rtc::scoped_refptr<FrameTransformerInterface> frame_transformer,
     uint32_t ssrc,
-    std::vector<uint32_t> csrcs,
     TaskQueueFactory* task_queue_factory)
     : sender_(sender),
       frame_transformer_(std::move(frame_transformer)),
       ssrc_(ssrc),
-      csrcs_(csrcs),
-      transformation_queue_(task_queue_factory->CreateTaskQueue(
-          "video_frame_transformer",
-          TaskQueueFactory::Priority::NORMAL)) {}
+      task_queue_factory_(task_queue_factory) {
+  RTC_DCHECK(task_queue_factory_);
+}
 
 void RTPSenderVideoFrameTransformerDelegate::Init() {
   frame_transformer_->RegisterTransformedFrameSinkCallback(
@@ -137,9 +119,32 @@ bool RTPSenderVideoFrameTransformerDelegate::TransformFrame(
     const EncodedImage& encoded_image,
     RTPVideoHeader video_header,
     absl::optional<int64_t> expected_retransmission_time_ms) {
+  TaskQueueBase* current = TaskQueueBase::Current();
+  if (!encoder_queue_) {
+    // Save the current task queue to post the transformed frame for sending
+    // once it is transformed. When there is no current task queue, i.e.
+    // encoding is done on an external thread (for example in the case of
+    // hardware encoders), create a new task queue.
+    if (current) {
+      encoder_queue_ = current;
+    } else {
+      owned_encoder_queue_ = task_queue_factory_->CreateTaskQueue(
+          "video_frame_transformer", TaskQueueFactory::Priority::NORMAL);
+      encoder_queue_ = owned_encoder_queue_.get();
+    }
+  }
+  // DCHECK that the current queue does not change, or if does then it was due
+  // to a hardware encoder fallback and thus there is an owned queue.
+  RTC_DCHECK(!current || current == encoder_queue_ || owned_encoder_queue_)
+      << "Current thread must either be an external thread (nullptr) or be the "
+         "same as the previous encoder queue. The current thread is "
+      << (current ? "non-null" : "nullptr") << " and the encoder thread is "
+      << (current == encoder_queue_ ? "the same queue."
+                                    : "not the same queue.");
+
   frame_transformer_->Transform(std::make_unique<TransformableVideoSenderFrame>(
       encoded_image, video_header, payload_type, codec_type, rtp_timestamp,
-      expected_retransmission_time_ms, ssrc_, csrcs_));
+      expected_retransmission_time_ms, ssrc_));
   return true;
 }
 
@@ -147,20 +152,22 @@ void RTPSenderVideoFrameTransformerDelegate::OnTransformedFrame(
     std::unique_ptr<TransformableFrameInterface> frame) {
   MutexLock lock(&sender_lock_);
 
-  if (!sender_) {
+  // The encoder queue normally gets destroyed after the sender;
+  // however, it might still be null by the time a previously queued frame
+  // arrives.
+  if (!sender_ || !encoder_queue_)
     return;
-  }
   rtc::scoped_refptr<RTPSenderVideoFrameTransformerDelegate> delegate(this);
-  transformation_queue_->PostTask(
+  encoder_queue_->PostTask(
       [delegate = std::move(delegate), frame = std::move(frame)]() mutable {
-        RTC_DCHECK_RUN_ON(delegate->transformation_queue_.get());
+        RTC_DCHECK_RUN_ON(delegate->encoder_queue_);
         delegate->SendVideo(std::move(frame));
       });
 }
 
 void RTPSenderVideoFrameTransformerDelegate::SendVideo(
     std::unique_ptr<TransformableFrameInterface> transformed_frame) const {
-  RTC_DCHECK_RUN_ON(transformation_queue_.get());
+  RTC_DCHECK_RUN_ON(encoder_queue_);
   RTC_CHECK_EQ(transformed_frame->GetDirection(),
                TransformableFrameInterface::Direction::kSender);
   MutexLock lock(&sender_lock_);
@@ -168,14 +175,13 @@ void RTPSenderVideoFrameTransformerDelegate::SendVideo(
     return;
   auto* transformed_video_frame =
       static_cast<TransformableVideoSenderFrame*>(transformed_frame.get());
-  sender_->SendVideo(transformed_video_frame->GetPayloadType(),
-                     transformed_video_frame->GetCodecType(),
-                     transformed_video_frame->GetTimestamp(),
-                     transformed_video_frame->GetCaptureTimeMs(),
-                     transformed_video_frame->GetData(),
-                     transformed_video_frame->GetHeader(),
-                     transformed_video_frame->GetExpectedRetransmissionTimeMs(),
-                     transformed_video_frame->GetMetadata().GetCsrcs());
+  sender_->SendVideo(
+      transformed_video_frame->GetPayloadType(),
+      transformed_video_frame->GetCodecType(),
+      transformed_video_frame->GetTimestamp(),
+      transformed_video_frame->GetCaptureTimeMs(),
+      transformed_video_frame->GetData(), transformed_video_frame->GetHeader(),
+      transformed_video_frame->GetExpectedRetransmissionTimeMs());
 }
 
 void RTPSenderVideoFrameTransformerDelegate::SetVideoStructureUnderLock(
@@ -200,21 +206,4 @@ void RTPSenderVideoFrameTransformerDelegate::Reset() {
     sender_ = nullptr;
   }
 }
-
-std::unique_ptr<TransformableVideoFrameInterface> CloneSenderVideoFrame(
-    TransformableVideoFrameInterface* original) {
-  auto encoded_image_buffer = EncodedImageBuffer::Create(
-      original->GetData().data(), original->GetData().size());
-  EncodedImage encoded_image;
-  encoded_image.SetEncodedData(encoded_image_buffer);
-  RTPVideoHeader new_header =
-      RTPVideoHeader::FromMetadata(original->GetMetadata());
-  // TODO(bugs.webrtc.org/14708): Fill in other EncodedImage parameters
-  return std::make_unique<TransformableVideoSenderFrame>(
-      encoded_image, new_header, original->GetPayloadType(), new_header.codec,
-      original->GetTimestamp(),
-      absl::nullopt,  // expected_retransmission_time_ms
-      original->GetSsrc(), original->GetMetadata().GetCsrcs());
-}
-
 }  // namespace webrtc

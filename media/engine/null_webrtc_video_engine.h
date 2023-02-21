@@ -51,7 +51,6 @@ class NullWebRtcVideoEngine : public VideoEngineInterface {
   }
 
   VideoMediaChannel* CreateMediaChannel(
-      MediaChannel::Role role,
       webrtc::Call* call,
       const MediaConfig& config,
       const VideoOptions& options,

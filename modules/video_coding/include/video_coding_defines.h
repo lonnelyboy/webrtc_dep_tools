@@ -18,7 +18,6 @@
 #include "api/video/video_content_type.h"
 #include "api/video/video_frame.h"
 #include "api/video/video_timing.h"
-#include "api/video_codecs/video_decoder.h"
 
 namespace webrtc {
 
@@ -59,8 +58,7 @@ class VCMReceiveCallback {
 
   // Called when the current receive codec changes.
   virtual void OnIncomingPayloadType(int payload_type);
-  virtual void OnDecoderInfoChanged(
-      const VideoDecoder::DecoderInfo& decoder_info);
+  virtual void OnDecoderImplementationName(const char* implementation_name);
 
  protected:
   virtual ~VCMReceiveCallback() {}

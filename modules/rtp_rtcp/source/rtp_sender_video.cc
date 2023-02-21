@@ -71,6 +71,7 @@ bool MinimizeDescriptor(RTPVideoHeader* video_header) {
     vp8->nonReference = non_reference;
     return true;
   }
+  // TODO(danilchap): Reduce vp9 codec specific descriptor too.
   return false;
 }
 
@@ -170,7 +171,6 @@ RTPSenderVideo::RTPSenderVideo(const Config& config)
                     this,
                     config.frame_transformer,
                     rtp_sender_->SSRC(),
-                    rtp_sender_->Csrcs(),
                     config.task_queue_factory)
               : nullptr),
       include_capture_clock_offset_(!absl::StartsWith(
@@ -474,8 +474,7 @@ bool RTPSenderVideo::SendVideo(
     int64_t capture_time_ms,
     rtc::ArrayView<const uint8_t> payload,
     RTPVideoHeader video_header,
-    absl::optional<int64_t> expected_retransmission_time_ms,
-    std::vector<uint32_t> csrcs) {
+    absl::optional<int64_t> expected_retransmission_time_ms) {
   TRACE_EVENT_ASYNC_STEP1("webrtc", "Video", capture_time_ms, "Send", "type",
                           FrameTypeToString(video_header.frame_type));
   RTC_CHECK_RUNS_SERIALIZED(&send_checker_);
@@ -485,7 +484,6 @@ bool RTPSenderVideo::SendVideo(
 
   if (payload.empty())
     return false;
-
   if (!rtp_sender_->SendingMedia()) {
     return false;
   }
@@ -527,43 +525,32 @@ bool RTPSenderVideo::SendVideo(
                         (use_fec ? FecPacketOverhead() : 0) -
                         (rtp_sender_->RtxStatus() ? kRtxHeaderSize : 0);
 
-  absl::optional<Timestamp> capture_time;
-  if (capture_time_ms > 0) {
-    capture_time = Timestamp::Millis(capture_time_ms);
-  }
-
-  rtp_sender_->SetCsrcs(std::move(csrcs));
-
   std::unique_ptr<RtpPacketToSend> single_packet =
       rtp_sender_->AllocatePacket();
   RTC_DCHECK_LE(packet_capacity, single_packet->capacity());
   single_packet->SetPayloadType(payload_type);
   single_packet->SetTimestamp(rtp_timestamp);
-  if (capture_time)
-    single_packet->set_capture_time(*capture_time);
+  single_packet->set_capture_time(Timestamp::Millis(capture_time_ms));
 
   // Construct the absolute capture time extension if not provided.
-  if (!video_header.absolute_capture_time.has_value() &&
-      capture_time.has_value()) {
+  if (!video_header.absolute_capture_time.has_value()) {
     video_header.absolute_capture_time.emplace();
     video_header.absolute_capture_time->absolute_capture_timestamp =
         Int64MsToUQ32x32(
-            clock_->ConvertTimestampToNtpTime(*capture_time).ToMs());
+            clock_->ConvertTimestampToNtpTimeInMilliseconds(capture_time_ms));
     if (include_capture_clock_offset_) {
       video_header.absolute_capture_time->estimated_capture_clock_offset = 0;
     }
   }
 
   // Let `absolute_capture_time_sender_` decide if the extension should be sent.
-  if (video_header.absolute_capture_time.has_value()) {
-    video_header.absolute_capture_time =
-        absolute_capture_time_sender_.OnSendPacket(
-            AbsoluteCaptureTimeSender::GetSource(single_packet->Ssrc(),
-                                                 single_packet->Csrcs()),
-            single_packet->Timestamp(), kVideoPayloadTypeFrequency,
-            video_header.absolute_capture_time->absolute_capture_timestamp,
-            video_header.absolute_capture_time->estimated_capture_clock_offset);
-  }
+  video_header.absolute_capture_time =
+      absolute_capture_time_sender_.OnSendPacket(
+          AbsoluteCaptureTimeSender::GetSource(single_packet->Ssrc(),
+                                               single_packet->Csrcs()),
+          single_packet->Timestamp(), kVideoPayloadTypeFrequency,
+          video_header.absolute_capture_time->absolute_capture_timestamp,
+          video_header.absolute_capture_time->estimated_capture_clock_offset);
 
   auto first_packet = std::make_unique<RtpPacketToSend>(*single_packet);
   auto middle_packet = std::make_unique<RtpPacketToSend>(*single_packet);
@@ -623,6 +610,7 @@ bool RTPSenderVideo::SendVideo(
     MinimizeDescriptor(&video_header);
   }
 
+  // TODO(benwright@webrtc.org) - Allocate enough to always encrypt inline.
   rtc::Buffer encrypted_video_payload;
   if (frame_encryptor_ != nullptr) {
     const size_t max_ciphertext_size =
@@ -781,7 +769,7 @@ bool RTPSenderVideo::SendEncodedImage(
   }
   return SendVideo(payload_type, codec_type, rtp_timestamp,
                    encoded_image.capture_time_ms_, encoded_image, video_header,
-                   expected_retransmission_time_ms, rtp_sender_->Csrcs());
+                   expected_retransmission_time_ms);
 }
 
 uint32_t RTPSenderVideo::PacketizationOverheadBps() const {

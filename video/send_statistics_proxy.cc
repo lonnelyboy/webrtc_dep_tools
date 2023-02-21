@@ -938,15 +938,11 @@ void SendStatisticsProxy::OnSendEncodedImage(
     const EncodedImage& encoded_image,
     const CodecSpecificInfo* codec_info) {
   // Simulcast is used for VP8, H264 and Generic.
-  // Currently, SimulcastIndex() could return the SpatialIndex() if not set
-  // correctly so gate on codec type.
-  // TODO(https://crbug.com/webrtc/14884): Delete this gating logic when
-  // SimulcastIndex() is guaranteed to be the stream index.
   int simulcast_idx =
       (codec_info && (codec_info->codecType == kVideoCodecVP8 ||
                       codec_info->codecType == kVideoCodecH264 ||
                       codec_info->codecType == kVideoCodecGeneric))
-          ? encoded_image.SimulcastIndex().value_or(0)
+          ? encoded_image.SpatialIndex().value_or(0)
           : 0;
 
   MutexLock lock(&mutex_);
@@ -989,8 +985,6 @@ void SendStatisticsProxy::OnSendEncodedImage(
   stats->frames_encoded++;
   stats->total_encode_time_ms += encoded_image.timing_.encode_finish_ms -
                                  encoded_image.timing_.encode_start_ms;
-  if (codec_info)
-    stats->scalability_mode = codec_info->scalability_mode;
   // Report resolution of the top spatial layer.
   bool is_top_spatial_layer =
       codec_info == nullptr || codec_info->end_of_picture;
@@ -1014,13 +1008,8 @@ void SendStatisticsProxy::OnSendEncodedImage(
         int spatial_idx = (rtp_config_.ssrcs.size() == 1) ? -1 : simulcast_idx;
         uma_container_->qp_counters_[spatial_idx].vp8.Add(encoded_image.qp_);
       } else if (codec_info->codecType == kVideoCodecVP9) {
-        // We could either have simulcast layers or spatial layers.
-        // TODO(https://crbug.com/webrtc/14891): When its possible to mix
-        // simulcast and SVC we'll also need to consider what, if anything, to
-        // report in a "simulcast of SVC streams" setup.
-        int stream_idx = encoded_image.SpatialIndex().value_or(
-            encoded_image.SimulcastIndex().value_or(-1));
-        uma_container_->qp_counters_[stream_idx].vp9.Add(encoded_image.qp_);
+        int spatial_idx = encoded_image.SpatialIndex().value_or(-1);
+        uma_container_->qp_counters_[spatial_idx].vp9.Add(encoded_image.qp_);
       } else if (codec_info->codecType == kVideoCodecH264) {
         int spatial_idx = (rtp_config_.ssrcs.size() == 1) ? -1 : simulcast_idx;
         uma_container_->qp_counters_[spatial_idx].h264.Add(encoded_image.qp_);
@@ -1064,12 +1053,11 @@ void SendStatisticsProxy::OnSendEncodedImage(
 }
 
 void SendStatisticsProxy::OnEncoderImplementationChanged(
-    EncoderImplementation implementation) {
+    const std::string& implementation_name) {
   MutexLock lock(&mutex_);
   encoder_changed_ = EncoderChangeEvent{stats_.encoder_implementation_name,
-                                        implementation.name};
-  stats_.encoder_implementation_name = implementation.name;
-  stats_.power_efficient_encoder = implementation.is_hardware_accelerated;
+                                        implementation_name};
+  stats_.encoder_implementation_name = implementation_name;
 }
 
 int SendStatisticsProxy::GetInputFrameRate() const {

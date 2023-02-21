@@ -65,6 +65,8 @@ void AndroidVideoTrackSource::SetState(JNIEnv* env,
     if (rtc::Thread::Current() == signaling_thread_) {
       FireOnChanged();
     } else {
+      // TODO(sakal): Is this even necessary, does FireOnChanged have to be
+      // called from signaling thread?
       signaling_thread_->PostTask([this] { FireOnChanged(); });
     }
   }

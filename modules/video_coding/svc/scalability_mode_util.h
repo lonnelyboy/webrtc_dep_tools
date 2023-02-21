@@ -23,8 +23,6 @@ enum class ScalabilityModeResolutionRatio {
   kThreeToTwo,  // The resolution ratio between spatial layers is 1.5:1.
 };
 
-static constexpr char kDefaultScalabilityModeStr[] = "L1T2";
-
 absl::optional<ScalabilityMode> ScalabilityModeFromString(
     absl::string_view scalability_mode_string);
 
@@ -37,9 +35,6 @@ int ScalabilityModeToNumTemporalLayers(ScalabilityMode scalability_mode);
 
 absl::optional<ScalabilityModeResolutionRatio> ScalabilityModeToResolutionRatio(
     ScalabilityMode scalability_mode);
-
-ScalabilityMode LimitNumSpatialLayers(ScalabilityMode scalability_mode,
-                                      int max_spatial_layers);
 
 }  // namespace webrtc
 

@@ -20,7 +20,6 @@
 #endif
 
 #include "absl/strings/string_view.h"
-#include "rtc_base/system/rtc_export.h"
 
 namespace rtc {
 
@@ -29,8 +28,8 @@ namespace rtc {
 const char* inet_ntop(int af, const void* src, char* dst, socklen_t size);
 int inet_pton(int af, absl::string_view src, void* dst);
 
-RTC_EXPORT bool HasIPv4Enabled();
-RTC_EXPORT bool HasIPv6Enabled();
+bool HasIPv4Enabled();
+bool HasIPv6Enabled();
 
 }  // namespace rtc
 

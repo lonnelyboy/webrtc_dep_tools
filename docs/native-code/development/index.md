@@ -116,16 +116,14 @@ When you have Ninja project files generated (see previous section), compile
 For [Ninja][ninja] project files generated in `out/Default`:
 
 ```
-$ autoninja -C out/Default
+$ ninja -C out/Default
 ```
 
 To build everything in the generated folder (`out/Default`):
 
 ```
-$ autoninja all -C out/Default
+$ ninja all -C out/Default
 ```
-
-`autoninja` is a wrapper that automatically provides optimal values for the arguments passed to `ninja`.
 
 See [Ninja build rules][ninja-build-rules] to read more about difference between `ninja` and `ninja all`.
 
@@ -197,13 +195,13 @@ find info on how to run trybots and applying for try rights.
 
 Many WebRTC committers are also Chromium committers. To make sure to use the
 right account for pushing commits to WebRTC, use the `user.email` Git config
-setting. The recommended way is to have the chromium committer account set globally
+setting. The recommended way is to have the chromium.org account set globally
 as described at the [depot tools setup page][depot-tools] and then set `user.email`
-locally for the WebRTC repos using:
+locally for the WebRTC repos using (change to your webrtc.org address):
 
 ```
 $ cd /path/to/webrtc/src
-$ git config user.email <YOUR_WEBRTC_COMMITTER_EMAIL>
+$ git config user.email yourname@webrtc.org
 ```
 
 ## Example Applications

@@ -22,11 +22,15 @@
 #include "api/numerics/samples_stats_counter.h"
 #include "api/test/metrics/metric.h"
 #include "api/units/time_delta.h"
-#include "api/units/timestamp.h"
+#include "api/video/i420_buffer.h"
 #include "api/video/video_frame.h"
+#include "common_video/libyuv/include/webrtc_libyuv.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
+#include "rtc_base/platform_thread.h"
 #include "rtc_base/strings/string_builder.h"
+#include "rtc_base/time_utils.h"
+#include "rtc_tools/frame_analyzer/video_geometry_aligner.h"
 #include "test/pc/e2e/analyzer/video/default_video_quality_analyzer_frame_in_flight.h"
 #include "test/pc/e2e/analyzer/video/default_video_quality_analyzer_frames_comparator.h"
 #include "test/pc/e2e/analyzer/video/default_video_quality_analyzer_internal_shared_objects.h"
@@ -265,10 +269,6 @@ uint16_t DefaultVideoQualityAnalyzer::OnFrameCaptured(
       RTC_DCHECK(is_removed)
           << "Invalid stream state: alive frame is removed already";
     }
-    if (options_.report_infra_metrics) {
-      analyzer_stats_.on_frame_captured_processing_time_ms.AddSample(
-          (Now() - captured_time).ms<double>());
-    }
   }
   return frame_id;
 }
@@ -276,7 +276,6 @@ uint16_t DefaultVideoQualityAnalyzer::OnFrameCaptured(
 void DefaultVideoQualityAnalyzer::OnFramePreEncode(
     absl::string_view peer_name,
     const webrtc::VideoFrame& frame) {
-  Timestamp processing_started = Now();
   MutexLock lock(&mutex_);
   RTC_CHECK_EQ(state_, State::kActive)
       << "DefaultVideoQualityAnalyzer has to be started before use";
@@ -294,11 +293,6 @@ void DefaultVideoQualityAnalyzer::OnFramePreEncode(
     }
   }
   frame_in_flight.SetPreEncodeTime(Now());
-
-  if (options_.report_infra_metrics) {
-    analyzer_stats_.on_frame_pre_encode_processing_time_ms.AddSample(
-        (Now() - processing_started).ms<double>());
-  }
 }
 
 void DefaultVideoQualityAnalyzer::OnFrameEncoded(
@@ -309,8 +303,6 @@ void DefaultVideoQualityAnalyzer::OnFrameEncoded(
     bool discarded) {
   if (discarded)
     return;
-
-  Timestamp processing_started = Now();
   MutexLock lock(&mutex_);
   RTC_CHECK_EQ(state_, State::kActive)
       << "DefaultVideoQualityAnalyzer has to be started before use";
@@ -347,15 +339,9 @@ void DefaultVideoQualityAnalyzer::OnFrameEncoded(
   used_encoder.last_frame_id = frame_id;
   used_encoder.switched_on_at = now;
   used_encoder.switched_from_at = now;
-  frame_in_flight.OnFrameEncoded(
-      now, encoded_image._frameType, DataSize::Bytes(encoded_image.size()),
-      stats.target_encode_bitrate, encoded_image.SpatialIndex().value_or(0),
-      stats.qp, used_encoder);
-
-  if (options_.report_infra_metrics) {
-    analyzer_stats_.on_frame_encoded_processing_time_ms.AddSample(
-        (Now() - processing_started).ms<double>());
-  }
+  frame_in_flight.OnFrameEncoded(now, encoded_image._frameType,
+                                 DataSize::Bytes(encoded_image.size()),
+                                 stats.target_encode_bitrate, used_encoder);
 }
 
 void DefaultVideoQualityAnalyzer::OnFrameDropped(
@@ -368,7 +354,6 @@ void DefaultVideoQualityAnalyzer::OnFramePreDecode(
     absl::string_view peer_name,
     uint16_t frame_id,
     const webrtc::EncodedImage& input_image) {
-  Timestamp processing_started = Now();
   MutexLock lock(&mutex_);
   RTC_CHECK_EQ(state_, State::kActive)
       << "DefaultVideoQualityAnalyzer has to be started before use";
@@ -410,18 +395,12 @@ void DefaultVideoQualityAnalyzer::OnFramePreDecode(
                               /*decode_start_time=*/Now(),
                               input_image._frameType,
                               DataSize::Bytes(input_image.size()));
-
-  if (options_.report_infra_metrics) {
-    analyzer_stats_.on_frame_pre_decode_processing_time_ms.AddSample(
-        (Now() - processing_started).ms<double>());
-  }
 }
 
 void DefaultVideoQualityAnalyzer::OnFrameDecoded(
     absl::string_view peer_name,
     const webrtc::VideoFrame& frame,
     const DecoderStats& stats) {
-  Timestamp processing_started = Now();
   MutexLock lock(&mutex_);
   RTC_CHECK_EQ(state_, State::kActive)
       << "DefaultVideoQualityAnalyzer has to be started before use";
@@ -455,19 +434,12 @@ void DefaultVideoQualityAnalyzer::OnFrameDecoded(
   used_decoder.last_frame_id = frame.id();
   used_decoder.switched_on_at = now;
   used_decoder.switched_from_at = now;
-  it->second.OnFrameDecoded(peer_index, now, frame.width(), frame.height(),
-                            used_decoder);
-
-  if (options_.report_infra_metrics) {
-    analyzer_stats_.on_frame_decoded_processing_time_ms.AddSample(
-        (Now() - processing_started).ms<double>());
-  }
+  it->second.OnFrameDecoded(peer_index, now, used_decoder);
 }
 
 void DefaultVideoQualityAnalyzer::OnFrameRendered(
     absl::string_view peer_name,
     const webrtc::VideoFrame& frame) {
-  Timestamp processing_started = Now();
   MutexLock lock(&mutex_);
   RTC_CHECK_EQ(state_, State::kActive)
       << "DefaultVideoQualityAnalyzer has to be started before use";
@@ -518,7 +490,8 @@ void DefaultVideoQualityAnalyzer::OnFrameRendered(
   stream_frame_counters_.at(stats_key).rendered++;
 
   // Update current frame stats.
-  frame_in_flight->OnFrameRendered(peer_index, Now());
+  frame_in_flight->OnFrameRendered(peer_index, Now(), frame.width(),
+                                   frame.height());
 
   // After we received frame here we need to check if there are any dropped
   // frames between this one and last one, that was rendered for this video
@@ -570,11 +543,6 @@ void DefaultVideoQualityAnalyzer::OnFrameRendered(
   if (frame_it->second.HaveAllPeersReceived()) {
     captured_frames_in_flight_.erase(frame_it);
   }
-
-  if (options_.report_infra_metrics) {
-    analyzer_stats_.on_frame_rendered_processing_time_ms.AddSample(
-        (Now() - processing_started).ms<double>());
-  }
 }
 
 void DefaultVideoQualityAnalyzer::OnEncoderError(
@@ -592,7 +560,6 @@ void DefaultVideoQualityAnalyzer::OnDecoderError(absl::string_view peer_name,
   RTC_LOG(LS_ERROR) << "Decoder error for frame_id=" << frame_id
                     << ", code=" << error_code;
 
-  Timestamp processing_started = Now();
   MutexLock lock(&mutex_);
   RTC_CHECK_EQ(state_, State::kActive)
       << "DefaultVideoQualityAnalyzer has to be started before use";
@@ -627,11 +594,6 @@ void DefaultVideoQualityAnalyzer::OnDecoderError(absl::string_view peer_name,
   used_decoder.switched_on_at = now;
   used_decoder.switched_from_at = now;
   it->second.OnDecoderError(peer_index, used_decoder);
-
-  if (options_.report_infra_metrics) {
-    analyzer_stats_.on_decoder_error_processing_time_ms.AddSample(
-        (Now() - processing_started).ms<double>());
-  }
 }
 
 void DefaultVideoQualityAnalyzer::RegisterParticipantInCall(
@@ -795,7 +757,7 @@ void DefaultVideoQualityAnalyzer::Stop() {
     FramesComparatorStats frames_comparator_stats =
         frames_comparator_.frames_comparator_stats();
     analyzer_stats_.comparisons_queue_size =
-        std::move(frames_comparator_stats.comparisons_queue_size);
+        frames_comparator_stats.comparisons_queue_size;
     analyzer_stats_.comparisons_done = frames_comparator_stats.comparisons_done;
     analyzer_stats_.cpu_overloaded_comparisons_done =
         frames_comparator_stats.cpu_overloaded_comparisons_done;
@@ -937,11 +899,9 @@ void DefaultVideoQualityAnalyzer::ReportResults() {
     ReportResults(item.first, item.second,
                   stream_frame_counters_.at(item.first));
   }
-  // TODO(bugs.webrtc.org/14757): Remove kExperimentalTestNameMetadataKey.
-  metrics_logger_->LogSingleValueMetric(
-      "cpu_usage_%", test_label_, GetCpuUsagePercent(), Unit::kUnitless,
-      ImprovementDirection::kSmallerIsBetter,
-      {{MetricMetadataKey::kExperimentalTestNameMetadataKey, test_label_}});
+  metrics_logger_->LogSingleValueMetric("cpu_usage_%", test_label_,
+                                        GetCpuUsagePercent(), Unit::kUnitless,
+                                        ImprovementDirection::kSmallerIsBetter);
   LogFrameCounters("Global", frame_counters_);
   if (!unknown_sender_frame_counters_.empty()) {
     RTC_LOG(LS_INFO) << "Received frame counters with unknown frame id:";
@@ -972,59 +932,6 @@ void DefaultVideoQualityAnalyzer::ReportResults() {
                    << analyzer_stats_.cpu_overloaded_comparisons_done;
   RTC_LOG(LS_INFO) << "memory_overloaded_comparisons_done="
                    << analyzer_stats_.memory_overloaded_comparisons_done;
-  if (options_.report_infra_metrics) {
-    metrics_logger_->LogMetric("comparisons_queue_size", test_label_,
-                               analyzer_stats_.comparisons_queue_size,
-                               Unit::kCount,
-                               ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogMetric("frames_in_flight_left_count", test_label_,
-                               analyzer_stats_.frames_in_flight_left_count,
-                               Unit::kCount,
-                               ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogSingleValueMetric(
-        "comparisons_done", test_label_, analyzer_stats_.comparisons_done,
-        Unit::kCount, ImprovementDirection::kNeitherIsBetter);
-    metrics_logger_->LogSingleValueMetric(
-        "cpu_overloaded_comparisons_done", test_label_,
-        analyzer_stats_.cpu_overloaded_comparisons_done, Unit::kCount,
-        ImprovementDirection::kNeitherIsBetter);
-    metrics_logger_->LogSingleValueMetric(
-        "memory_overloaded_comparisons_done", test_label_,
-        analyzer_stats_.memory_overloaded_comparisons_done, Unit::kCount,
-        ImprovementDirection::kNeitherIsBetter);
-    metrics_logger_->LogSingleValueMetric(
-        "test_duration", test_label_, (Now() - start_time_).ms(),
-        Unit::kMilliseconds, ImprovementDirection::kNeitherIsBetter);
-
-    metrics_logger_->LogMetric(
-        "on_frame_captured_processing_time_ms", test_label_,
-        analyzer_stats_.on_frame_captured_processing_time_ms,
-        Unit::kMilliseconds, ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogMetric(
-        "on_frame_pre_encode_processing_time_ms", test_label_,
-        analyzer_stats_.on_frame_pre_encode_processing_time_ms,
-        Unit::kMilliseconds, ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogMetric(
-        "on_frame_encoded_processing_time_ms", test_label_,
-        analyzer_stats_.on_frame_encoded_processing_time_ms,
-        Unit::kMilliseconds, ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogMetric(
-        "on_frame_pre_decode_processing_time_ms", test_label_,
-        analyzer_stats_.on_frame_pre_decode_processing_time_ms,
-        Unit::kMilliseconds, ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogMetric(
-        "on_frame_decoded_processing_time_ms", test_label_,
-        analyzer_stats_.on_frame_decoded_processing_time_ms,
-        Unit::kMilliseconds, ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogMetric(
-        "on_frame_rendered_processing_time_ms", test_label_,
-        analyzer_stats_.on_frame_rendered_processing_time_ms,
-        Unit::kMilliseconds, ImprovementDirection::kSmallerIsBetter);
-    metrics_logger_->LogMetric(
-        "on_decoder_error_processing_time_ms", test_label_,
-        analyzer_stats_.on_decoder_error_processing_time_ms,
-        Unit::kMilliseconds, ImprovementDirection::kSmallerIsBetter);
-  }
 }
 
 void DefaultVideoQualityAnalyzer::ReportResults(
@@ -1033,13 +940,10 @@ void DefaultVideoQualityAnalyzer::ReportResults(
     const FrameCounters& frame_counters) {
   TimeDelta test_duration = Now() - start_time_;
   std::string test_case_name = GetTestCaseName(ToMetricName(key));
-  // TODO(bugs.webrtc.org/14757): Remove kExperimentalTestNameMetadataKey.
   std::map<std::string, std::string> metric_metadata{
       {MetricMetadataKey::kPeerMetadataKey, peers_->name(key.sender)},
-      {MetricMetadataKey::kVideoStreamMetadataKey, streams_.name(key.stream)},
-      {MetricMetadataKey::kSenderMetadataKey, peers_->name(key.sender)},
-      {MetricMetadataKey::kReceiverMetadataKey, peers_->name(key.receiver)},
-      {MetricMetadataKey::kExperimentalTestNameMetadataKey, test_label_}};
+      {MetricMetadataKey::kStreamMetadataKey, streams_.name(key.stream)},
+      {MetricMetadataKey::kReceiverMetadataKey, peers_->name(key.receiver)}};
 
   double sum_squared_interframe_delays_secs = 0;
   Timestamp video_start_time = Timestamp::PlusInfinity();
@@ -1106,7 +1010,7 @@ void DefaultVideoQualityAnalyzer::ReportResults(
                              ImprovementDirection::kSmallerIsBetter,
                              metric_metadata);
   metrics_logger_->LogMetric(
-      "pixels_per_frame", test_case_name, stats.resolution_of_decoded_frame,
+      "pixels_per_frame", test_case_name, stats.resolution_of_rendered_frame,
       Unit::kCount, ImprovementDirection::kBiggerIsBetter, metric_metadata);
   metrics_logger_->LogSingleValueMetric(
       "min_psnr_dB", test_case_name,
@@ -1137,15 +1041,6 @@ void DefaultVideoQualityAnalyzer::ReportResults(
       "target_encode_bitrate", test_case_name,
       stats.target_encode_bitrate / 1000, Unit::kKilobitsPerSecond,
       ImprovementDirection::kNeitherIsBetter, metric_metadata);
-  for (const auto& [spatial_layer, qp] : stats.spatial_layers_qp) {
-    std::map<std::string, std::string> qp_metadata = metric_metadata;
-    qp_metadata[MetricMetadataKey::kSpatialLayerMetadataKey] =
-        std::to_string(spatial_layer);
-    metrics_logger_->LogMetric("qp_sl" + std::to_string(spatial_layer),
-                               test_case_name, qp, Unit::kUnitless,
-                               ImprovementDirection::kSmallerIsBetter,
-                               std::move(qp_metadata));
-  }
   metrics_logger_->LogSingleValueMetric(
       "actual_encode_bitrate", test_case_name,
       static_cast<double>(stats.total_encoded_images_payload) /
@@ -1154,12 +1049,6 @@ void DefaultVideoQualityAnalyzer::ReportResults(
       metric_metadata);
 
   if (options_.report_detailed_frame_stats) {
-    metrics_logger_->LogSingleValueMetric(
-        "capture_frame_rate", test_case_name,
-        stats.capture_frame_rate.IsEmpty()
-            ? 0
-            : stats.capture_frame_rate.GetEventsPerSecond(),
-        Unit::kHertz, ImprovementDirection::kBiggerIsBetter, metric_metadata);
     metrics_logger_->LogSingleValueMetric(
         "num_encoded_frames", test_case_name, frame_counters.encoded,
         Unit::kCount, ImprovementDirection::kBiggerIsBetter, metric_metadata);

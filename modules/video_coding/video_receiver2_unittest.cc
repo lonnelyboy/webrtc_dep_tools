@@ -41,10 +41,7 @@ class MockVCMReceiveCallback : public VCMReceiveCallback {
       (VideoFrame&, absl::optional<uint8_t>, TimeDelta, VideoContentType),
       (override));
   MOCK_METHOD(void, OnIncomingPayloadType, (int), (override));
-  MOCK_METHOD(void,
-              OnDecoderInfoChanged,
-              (const VideoDecoder::DecoderInfo&),
-              (override));
+  MOCK_METHOD(void, OnDecoderImplementationName, (const char*), (override));
 };
 
 class TestEncodedFrame : public EncodedFrame {
@@ -129,7 +126,7 @@ TEST_F(VideoReceiver2Test, RegisterReceiveCodecs) {
   EXPECT_TRUE(receiver_.IsExternalDecoderRegistered(kPayloadType));
 
   EXPECT_CALL(receive_callback_, OnIncomingPayloadType(kPayloadType));
-  EXPECT_CALL(receive_callback_, OnDecoderInfoChanged);
+  EXPECT_CALL(receive_callback_, OnDecoderImplementationName);
 
   // Call `Decode`. This triggers the above call expectations.
   EXPECT_EQ(receiver_.Decode(&frame), VCM_OK);

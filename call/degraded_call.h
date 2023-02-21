@@ -113,11 +113,9 @@ class DegradedCall : public Call, private PacketReceiver {
 
  protected:
   // Implements PacketReceiver.
-  void DeliverRtpPacket(
-      MediaType media_type,
-      RtpPacketReceived packet,
-      OnUndemuxablePacketHandler undemuxable_packet_handler) override;
-  void DeliverRtcpPacket(rtc::CopyOnWriteBuffer packet) override;
+  DeliveryStatus DeliverPacket(MediaType media_type,
+                               rtc::CopyOnWriteBuffer packet,
+                               int64_t packet_time_us) override;
 
  private:
   class FakeNetworkPipeOnTaskQueue {
@@ -149,6 +147,25 @@ class DegradedCall : public Call, private PacketReceiver {
     absl::optional<int64_t> next_process_ms_ RTC_GUARDED_BY(&task_queue_);
   };
 
+  class ThreadedPacketReceiver : public PacketReceiver {
+   public:
+    ThreadedPacketReceiver(webrtc::TaskQueueBase* worker_thread,
+                           webrtc::TaskQueueBase* network_thread,
+                           rtc::scoped_refptr<PendingTaskSafetyFlag> call_alive,
+                           PacketReceiver* receiver);
+    ~ThreadedPacketReceiver() override;
+
+    DeliveryStatus DeliverPacket(MediaType media_type,
+                                 rtc::CopyOnWriteBuffer packet,
+                                 int64_t packet_time_us) override;
+
+   private:
+    webrtc::TaskQueueBase* const worker_thread_;
+    webrtc::TaskQueueBase* const network_thread_;
+    rtc::scoped_refptr<PendingTaskSafetyFlag> call_alive_;
+    webrtc::PacketReceiver* const receiver_;
+  };
+
   // For audio/video send stream, a TransportAdapter instance is used to
   // intercept packets to be sent, and put them into a common FakeNetworkPipe
   // in such as way that they will eventually (unless dropped) be forwarded to
@@ -174,7 +191,7 @@ class DegradedCall : public Call, private PacketReceiver {
   };
 
   void SetClientBitratePreferences(
-      const webrtc::BitrateSettings& preferences) override;
+      const webrtc::BitrateSettings& preferences) override {}
   void UpdateSendNetworkConfig();
   void UpdateReceiveNetworkConfig();
 
@@ -194,9 +211,8 @@ class DegradedCall : public Call, private PacketReceiver {
   size_t receive_config_index_;
   const std::vector<TimeScopedNetworkConfig> receive_configs_;
   SimulatedNetwork* receive_simulated_network_;
-  SequenceChecker received_packet_sequence_checker_;
-  std::unique_ptr<FakeNetworkPipe> receive_pipe_
-      RTC_GUARDED_BY(received_packet_sequence_checker_);
+  std::unique_ptr<FakeNetworkPipe> receive_pipe_;
+  std::unique_ptr<ThreadedPacketReceiver> packet_receiver_;
 };
 
 }  // namespace webrtc

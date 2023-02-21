@@ -186,6 +186,8 @@ class FieldTrials : public FieldTrialsView {
     // Ignore following field trials.
     if (key == "WebRTC-CongestionWindow" ||
         key == "WebRTC-UseBaseHeavyVP8TL3RateAllocation" ||
+        key == "WebRTC-SimulcastUpswitchHysteresisPercent" ||
+        key == "WebRTC-SimulcastScreenshareUpswitchHysteresisPercent" ||
         key == "WebRTC-VideoRateControl" ||
         key == "WebRTC-VP9-PerformanceFlags" ||
         key == "WebRTC-VP9VariableFramerateScreenshare" ||

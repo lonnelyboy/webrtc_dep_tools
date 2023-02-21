@@ -20,7 +20,7 @@
 #include "api/array_view.h"
 #include "api/jsep.h"
 #include "api/rtp_parameters.h"
-#include "api/test/pclf/media_configuration.h"
+#include "api/test/peerconnection_quality_test_fixture.h"
 #include "media/base/rid_description.h"
 #include "pc/session_description.h"
 #include "pc/simulcast_description.h"
@@ -40,7 +40,8 @@ namespace webrtc_pc_e2e {
 // vector and they will be added in the same order, as they were in
 // `supported_codecs`.
 std::vector<RtpCodecCapability> FilterVideoCodecCapabilities(
-    rtc::ArrayView<const VideoCodecConfig> video_codecs,
+    rtc::ArrayView<const PeerConnectionE2EQualityTestFixture::VideoCodecConfig>
+        video_codecs,
     bool use_rtx,
     bool use_ulpfec,
     bool use_flexfec,
@@ -76,10 +77,10 @@ class SignalingInterceptor {
 
   LocalAndRemoteSdp PatchOffer(
       std::unique_ptr<SessionDescriptionInterface> offer,
-      const VideoCodecConfig& first_codec);
+      const PeerConnectionE2EQualityTestFixture::VideoCodecConfig& first_codec);
   LocalAndRemoteSdp PatchAnswer(
       std::unique_ptr<SessionDescriptionInterface> answer,
-      const VideoCodecConfig& first_codec);
+      const PeerConnectionE2EQualityTestFixture::VideoCodecConfig& first_codec);
 
   std::vector<std::unique_ptr<IceCandidateInterface>> PatchOffererIceCandidates(
       rtc::ArrayView<const IceCandidateInterface* const> candidates);

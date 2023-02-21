@@ -11,7 +11,8 @@
 #ifndef P2P_BASE_ICE_AGENT_INTERFACE_H_
 #define P2P_BASE_ICE_AGENT_INTERFACE_H_
 
-#include "api/array_view.h"
+#include <vector>
+
 #include "p2p/base/connection.h"
 #include "p2p/base/ice_switch_reason.h"
 
@@ -60,7 +61,7 @@ class IceAgentInterface {
   //
   // SignalStateChange will not be triggered.
   virtual void ForgetLearnedStateForConnections(
-      rtc::ArrayView<const Connection* const> connections) = 0;
+      std::vector<const Connection*> connections) = 0;
 
   // Send a STUN ping request for the given connection.
   virtual void SendPingRequest(const Connection* connection) = 0;
@@ -71,8 +72,7 @@ class IceAgentInterface {
 
   // Prune away the given connections. Returns true if pruning is permitted and
   // successfully performed.
-  virtual bool PruneConnections(
-      rtc::ArrayView<const Connection* const> connections) = 0;
+  virtual bool PruneConnections(std::vector<const Connection*> connections) = 0;
 };
 
 }  // namespace cricket

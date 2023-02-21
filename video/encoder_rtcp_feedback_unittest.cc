@@ -16,8 +16,6 @@
 #include "test/gtest.h"
 #include "video/test/mock_video_stream_encoder.h"
 
-using ::testing::_;
-
 namespace webrtc {
 
 class VieKeyRequestTest : public ::testing::Test {
@@ -40,18 +38,18 @@ class VieKeyRequestTest : public ::testing::Test {
 };
 
 TEST_F(VieKeyRequestTest, CreateAndTriggerRequests) {
-  EXPECT_CALL(encoder_, SendKeyFrame(_)).Times(1);
+  EXPECT_CALL(encoder_, SendKeyFrame()).Times(1);
   encoder_rtcp_feedback_.OnReceivedIntraFrameRequest(kSsrc);
 }
 
 TEST_F(VieKeyRequestTest, TooManyOnReceivedIntraFrameRequest) {
-  EXPECT_CALL(encoder_, SendKeyFrame(_)).Times(1);
+  EXPECT_CALL(encoder_, SendKeyFrame()).Times(1);
   encoder_rtcp_feedback_.OnReceivedIntraFrameRequest(kSsrc);
   encoder_rtcp_feedback_.OnReceivedIntraFrameRequest(kSsrc);
   simulated_clock_.AdvanceTimeMilliseconds(10);
   encoder_rtcp_feedback_.OnReceivedIntraFrameRequest(kSsrc);
 
-  EXPECT_CALL(encoder_, SendKeyFrame(_)).Times(1);
+  EXPECT_CALL(encoder_, SendKeyFrame()).Times(1);
   simulated_clock_.AdvanceTimeMilliseconds(300);
   encoder_rtcp_feedback_.OnReceivedIntraFrameRequest(kSsrc);
   encoder_rtcp_feedback_.OnReceivedIntraFrameRequest(kSsrc);

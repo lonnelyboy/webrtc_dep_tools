@@ -65,7 +65,8 @@ std::unique_ptr<DesktopCapturer> DesktopCapturer::CreateRawScreenCapturer(
 }
 
 ScreenCapturerFuchsia::ScreenCapturerFuchsia()
-    : component_context_(sys::ComponentContext::Create()) {
+    : component_context_(
+          sys::ComponentContext::CreateAndServeOutgoingDirectory()) {
   RTC_DCHECK(CheckRequirements());
 }
 
@@ -85,7 +86,7 @@ ScreenCapturerFuchsia::~ScreenCapturerFuchsia() {
 // TODO(fxbug.dev/100303): Remove this function when Flatland is the only API.
 bool ScreenCapturerFuchsia::CheckRequirements() {
   std::unique_ptr<sys::ComponentContext> component_context =
-      sys::ComponentContext::Create();
+      sys::ComponentContext::CreateAndServeOutgoingDirectory();
   fuchsia::ui::scenic::ScenicSyncPtr scenic;
   zx_status_t status = component_context->svc()->Connect(scenic.NewRequest());
   if (status != ZX_OK) {
@@ -162,9 +163,6 @@ void ScreenCapturerFuchsia::CaptureFrame() {
   uint32_t stride = kFuchsiaBytesPerPixel * pixels_per_row;
   frame->CopyPixelsFrom(virtual_memory_mapped_addrs_[buffer_index], stride,
                         DesktopRect::MakeWH(width_, height_));
-  // Mark the whole screen as having been updated.
-  frame->mutable_updated_region()->SetRect(
-      DesktopRect::MakeWH(width_, height_));
 
   fuchsia::ui::composition::ScreenCapture_ReleaseFrame_Result release_result;
   screen_capture_->ReleaseFrame(buffer_index, &release_result);

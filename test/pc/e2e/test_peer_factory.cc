@@ -15,8 +15,6 @@
 #include "absl/strings/string_view.h"
 #include "api/task_queue/default_task_queue_factory.h"
 #include "api/test/create_time_controller.h"
-#include "api/test/pclf/media_configuration.h"
-#include "api/test/pclf/peer_configurer.h"
 #include "api/test/time_controller.h"
 #include "api/transport/field_trial_based_config.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
@@ -28,12 +26,19 @@
 #include "rtc_base/thread.h"
 #include "test/pc/e2e/analyzer/video/quality_analyzing_video_encoder.h"
 #include "test/pc/e2e/echo/echo_emulation.h"
+#include "test/pc/e2e/peer_configurer.h"
 #include "test/testsupport/copy_to_file_audio_capturer.h"
 
 namespace webrtc {
 namespace webrtc_pc_e2e {
 namespace {
 
+using AudioConfig =
+    ::webrtc::webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::AudioConfig;
+using VideoConfig =
+    ::webrtc::webrtc_pc_e2e::PeerConnectionE2EQualityTestFixture::VideoConfig;
+using EchoEmulationConfig = ::webrtc::webrtc_pc_e2e::
+    PeerConnectionE2EQualityTestFixture::EchoEmulationConfig;
 using EmulatedSFUConfigMap =
     ::webrtc::webrtc_pc_e2e::QualityAnalyzingVideoEncoder::EmulatedSFUConfigMap;
 
@@ -169,8 +174,6 @@ std::unique_ptr<cricket::MediaEngineInterface> CreateMediaEngine(
       std::move(pcf_dependencies->video_encoder_factory);
   media_deps.video_decoder_factory =
       std::move(pcf_dependencies->video_decoder_factory);
-  media_deps.audio_encoder_factory = pcf_dependencies->audio_encoder_factory;
-  media_deps.audio_decoder_factory = pcf_dependencies->audio_decoder_factory;
   webrtc::SetMediaEngineDefaults(&media_deps);
   RTC_DCHECK(pcf_dependencies->trials);
   media_deps.trials = pcf_dependencies->trials.get();
@@ -292,16 +295,17 @@ absl::optional<RemotePeerAudioConfig> RemotePeerAudioConfig::Create(
 }
 
 std::unique_ptr<TestPeer> TestPeerFactory::CreateTestPeer(
-    std::unique_ptr<PeerConfigurer> configurer,
+    std::unique_ptr<PeerConfigurerImpl> configurer,
     std::unique_ptr<MockPeerConnectionObserver> observer,
     absl::optional<RemotePeerAudioConfig> remote_audio_config,
-    absl::optional<EchoEmulationConfig> echo_emulation_config) {
+    absl::optional<PeerConnectionE2EQualityTestFixture::EchoEmulationConfig>
+        echo_emulation_config) {
   std::unique_ptr<InjectableComponents> components =
       configurer->ReleaseComponents();
   std::unique_ptr<Params> params = configurer->ReleaseParams();
   std::unique_ptr<ConfigurableParams> configurable_params =
       configurer->ReleaseConfigurableParams();
-  std::vector<PeerConfigurer::VideoSource> video_sources =
+  std::vector<PeerConfigurerImpl::VideoSource> video_sources =
       configurer->ReleaseVideoSources();
   RTC_DCHECK(components);
   RTC_DCHECK(params);

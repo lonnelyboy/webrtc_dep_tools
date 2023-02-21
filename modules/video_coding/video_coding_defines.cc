@@ -14,7 +14,7 @@ namespace webrtc {
 
 void VCMReceiveCallback::OnDroppedFrames(uint32_t frames_dropped) {}
 void VCMReceiveCallback::OnIncomingPayloadType(int payload_type) {}
-void VCMReceiveCallback::OnDecoderInfoChanged(
-    const VideoDecoder::DecoderInfo&) {}
+void VCMReceiveCallback::OnDecoderImplementationName(
+    const char* implementation_name) {}
 
 }  // namespace webrtc

@@ -44,9 +44,7 @@ class UniqueNumberGenerator {
   // If there are no available numbers to generate, this method will fail
   // with an `RTC_CHECK`.
   TIntegral GenerateNumber();
-
-  // Alias for GenerateId, used for allowing typed testing
-  TIntegral Generate() { return GenerateNumber(); }
+  TIntegral operator()() { return GenerateNumber(); }
 
   // Adds an id that this generator should no longer generate.
   // Return value indicates whether the ID was hitherto unknown.
@@ -76,9 +74,7 @@ class UniqueRandomIdGenerator {
   // This method becomes more expensive with each use, as the probability of
   // collision for the randomly generated numbers increases.
   uint32_t GenerateId();
-
-  // Alias for GenerateId, used for allowing typed testing
-  uint32_t Generate() { return GenerateId(); }
+  uint32_t operator()() { return GenerateId(); }
 
   // Adds an id that this generator should no longer generate.
   // Return value indicates whether the ID was hitherto unknown.
@@ -104,8 +100,7 @@ class UniqueStringGenerator {
   ~UniqueStringGenerator();
 
   std::string GenerateString();
-  // Alias for GenerateString, used for allowing typed testing
-  std::string Generate() { return GenerateString(); }
+  std::string operator()() { return GenerateString(); }
 
   // Adds an id that this generator should no longer generate.
   // Return value indicates whether the ID was hitherto unknown.

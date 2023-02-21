@@ -60,6 +60,8 @@ RtpPacket::RtpPacket() : RtpPacket(nullptr, kDefaultPacketSize) {}
 RtpPacket::RtpPacket(const ExtensionManager* extensions)
     : RtpPacket(extensions, kDefaultPacketSize) {}
 
+RtpPacket::RtpPacket(const RtpPacket&) = default;
+
 RtpPacket::RtpPacket(const ExtensionManager* extensions, size_t capacity)
     : extensions_(extensions ? *extensions : ExtensionManager()),
       buffer_(capacity) {
@@ -67,11 +69,7 @@ RtpPacket::RtpPacket(const ExtensionManager* extensions, size_t capacity)
   Clear();
 }
 
-RtpPacket::RtpPacket(const RtpPacket&) = default;
-RtpPacket::RtpPacket(RtpPacket&&) = default;
-RtpPacket& RtpPacket::operator=(const RtpPacket&) = default;
-RtpPacket& RtpPacket::operator=(RtpPacket&&) = default;
-RtpPacket::~RtpPacket() = default;
+RtpPacket::~RtpPacket() {}
 
 void RtpPacket::IdentifyExtensions(ExtensionManager extensions) {
   extensions_ = std::move(extensions);
@@ -190,8 +188,8 @@ void RtpPacket::ZeroMutableExtensions() {
       case RTPExtensionType::kRtpExtensionCsrcAudioLevel:
       case RTPExtensionType::kRtpExtensionAbsoluteCaptureTime:
       case RTPExtensionType::kRtpExtensionColorSpace:
-      case RTPExtensionType::kRtpExtensionGenericFrameDescriptor:
-      case RTPExtensionType::kRtpExtensionDependencyDescriptor:
+      case RTPExtensionType::kRtpExtensionGenericFrameDescriptor00:
+      case RTPExtensionType::kRtpExtensionGenericFrameDescriptor02:
       case RTPExtensionType::kRtpExtensionMid:
       case RTPExtensionType::kRtpExtensionNumberOfExtensions:
       case RTPExtensionType::kRtpExtensionPlayoutDelay:

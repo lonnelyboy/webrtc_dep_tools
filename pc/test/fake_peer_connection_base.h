@@ -17,7 +17,6 @@
 #include <string>
 #include <vector>
 
-#include "absl/types/optional.h"
 #include "api/field_trials_view.h"
 #include "api/sctp_transport_interface.h"
 #include "pc/peer_connection_internal.h"
@@ -48,13 +47,6 @@ class FakePeerConnectionBase : public PeerConnectionInternal {
   RTCErrorOr<rtc::scoped_refptr<RtpSenderInterface>> AddTrack(
       rtc::scoped_refptr<MediaStreamTrackInterface> track,
       const std::vector<std::string>& stream_ids) override {
-    return RTCError(RTCErrorType::UNSUPPORTED_OPERATION, "Not implemented");
-  }
-
-  RTCErrorOr<rtc::scoped_refptr<RtpSenderInterface>> AddTrack(
-      rtc::scoped_refptr<MediaStreamTrackInterface> track,
-      const std::vector<std::string>& stream_ids,
-      const std::vector<RtpEncodingParameters>& init_send_encodings) override {
     return RTCError(RTCErrorType::UNSUPPORTED_OPERATION, "Not implemented");
   }
 
@@ -273,10 +265,6 @@ class FakePeerConnectionBase : public PeerConnectionInternal {
   }
 
   Call::Stats GetCallStats() override { return Call::Stats(); }
-
-  absl::optional<AudioDeviceModule::Stats> GetAudioDeviceStats() override {
-    return absl::nullopt;
-  }
 
   bool GetLocalCertificate(
       const std::string& transport_name,

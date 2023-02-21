@@ -39,25 +39,16 @@ class TaskQueuePacedSender : public RtpPacketPacer, public RtpPacketSender {
  public:
   static const int kNoPacketHoldback;
 
-  // The pacer can be configured using `field_trials` or specified parameters.
-  //
   // The `hold_back_window` parameter sets a lower bound on time to sleep if
   // there is currently a pacer queue and packets can't immediately be
   // processed. Increasing this reduces thread wakeups at the expense of higher
   // latency.
-  //
-  // If the `burst_interval` parameter is set, the pacer is allowed to build up
-  // a packet "debt" that correspond to approximately the send rate during the
-  // specified interval. This greatly reduced wake ups by not pacing packets
-  // within the allowed burst budget.
-  TaskQueuePacedSender(
-      Clock* clock,
-      PacingController::PacketSender* packet_sender,
-      const FieldTrialsView& field_trials,
-      TaskQueueFactory* task_queue_factory,
-      TimeDelta max_hold_back_window,
-      int max_hold_back_window_in_packets,
-      absl::optional<TimeDelta> burst_interval = absl::nullopt);
+  TaskQueuePacedSender(Clock* clock,
+                       PacingController::PacketSender* packet_sender,
+                       const FieldTrialsView& field_trials,
+                       TaskQueueFactory* task_queue_factory,
+                       TimeDelta max_hold_back_window,
+                       int max_hold_back_window_in_packets);
 
   ~TaskQueuePacedSender() override;
 
@@ -70,8 +61,6 @@ class TaskQueuePacedSender : public RtpPacketPacer, public RtpPacketSender {
   // PacingController::PacketSender::SendPacket() when it's time to send.
   void EnqueuePackets(
       std::vector<std::unique_ptr<RtpPacketToSend>> packets) override;
-  // Remove any pending packets matching this SSRC from the packet queue.
-  void RemovePacketsForSsrc(uint32_t ssrc) override;
 
   // Methods implementing RtpPacketPacer.
 

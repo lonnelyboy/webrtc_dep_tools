@@ -140,7 +140,7 @@ if (is_android) {
       ":native_api_jni",
       ":video_egl_jni",
       "../../pc:libjingle_peerconnection",
-      "../../rtc_base:ssl",
+      "../../rtc_base",
     ]
     output_extension = "so"
   }
@@ -527,6 +527,7 @@ if (is_android) {
     deps = [
       ":base_java",
       ":dav1d_java",
+      ":libaom_av1_encoder_java",
       ":libvpx_vp8_java",
       ":libvpx_vp9_java",
       ":video_api_java",
@@ -570,6 +571,7 @@ if (current_os == "linux" || is_android) {
       "../../api:sequence_checker",
       "../../api/task_queue:pending_task_safety_flag",
       "../../modules/audio_processing:api",
+      "../../rtc_base",
       "../../rtc_base:checks",
       "../../rtc_base:ip_address",
       "../../rtc_base:logging",
@@ -672,6 +674,7 @@ if (current_os == "linux" || is_android) {
       "../../modules/video_coding:video_codec_interface",
       "../../modules/video_coding:video_coding_utility",
       "../../modules/video_coding/svc:scalable_video_controller",
+      "../../rtc_base",
       "../../rtc_base:checks",
       "../../rtc_base:logging",
       "../../rtc_base:race_checker",
@@ -763,12 +766,10 @@ if (current_os == "linux" || is_android) {
       ":native_api_stacktrace",
       "..:media_constraints",
       "../../api:callfactory_api",
-      "../../api:dtmf_sender_interface",
       "../../api:libjingle_peerconnection_api",
       "../../api:media_stream_interface",
       "../../api:rtc_event_log_output_file",
       "../../api:rtp_parameters",
-      "../../api:rtp_sender_interface",
       "../../api:turn_customizer",
       "../../api/crypto:options",
       "../../api/rtc_event_log:rtc_event_log_factory",
@@ -782,15 +783,13 @@ if (current_os == "linux" || is_android) {
       "../../modules/utility",
       "../../pc:media_stream_observer",
       "../../pc:webrtc_sdp",
+      "../../rtc_base",
       "../../rtc_base:checks",
       "../../rtc_base:event_tracer",
-      "../../rtc_base:log_sinks",
       "../../rtc_base:logging",
       "../../rtc_base:refcount",
-      "../../rtc_base:rtc_certificate_generator",
       "../../rtc_base:rtc_task_queue",
       "../../rtc_base:safe_conversions",
-      "../../rtc_base:ssl",
       "../../rtc_base:stringutils",
       "../../rtc_base:threading",
       "../../system_wrappers:field_trial",
@@ -887,20 +886,9 @@ if (current_os == "linux" || is_android) {
   rtc_library("swcodecs_jni") {
     visibility = [ "*" ]
     allow_poison = [ "software_video_codecs" ]
-    sources = [
-      "src/jni/software_video_decoder_factory.cc",
-      "src/jni/software_video_encoder_factory.cc",
-    ]
     deps = [
-      ":base_jni",
-      ":generated_swcodecs_jni",
       ":libvpx_vp8_jni",
       ":libvpx_vp9_jni",
-      ":native_api_jni",
-      ":video_jni",
-      "../../api/video_codecs:builtin_video_decoder_factory",
-      "../../api/video_codecs:builtin_video_encoder_factory",
-      "../../api/video_codecs:video_codecs_api",
     ]
   }
 
@@ -951,6 +939,7 @@ if (current_os == "linux" || is_android) {
     deps = [
       ":base_jni",
       ":native_api_jni",
+      "//rtc_base",
       "//rtc_base:checks",
     ]
   }
@@ -1011,6 +1000,7 @@ if (current_os == "linux" || is_android) {
     deps = [
       ":base_jni",
       "../../rtc_base:threading",
+      "//rtc_base",
     ]
   }
 
@@ -1027,6 +1017,7 @@ if (current_os == "linux" || is_android) {
       "../../rtc_base:threading",
       "//api:libjingle_peerconnection_api",
       "//api/video_codecs:video_codecs_api",
+      "//rtc_base",
     ]
   }
 
@@ -1068,6 +1059,7 @@ if (current_os == "linux" || is_android) {
       "//api:media_stream_interface",
       "//api/video:video_frame",
       "//api/video:video_rtp_headers",
+      "//rtc_base",
     ]
   }
 
@@ -1112,6 +1104,7 @@ if (current_os == "linux" || is_android) {
       "../../api/video:video_frame",
       "../../api/video:video_rtp_headers",
       "../../common_video",
+      "../../rtc_base",
       "../../rtc_base:checks",
       "../../rtc_base:refcount",
       "../../rtc_base:timeutils",
@@ -1129,6 +1122,7 @@ if (current_os == "linux" || is_android) {
       ":base_jni",
       ":generated_logging_jni",
       ":native_api_jni",
+      "../../rtc_base",
       "../../rtc_base:logging",
     ]
 
@@ -1360,16 +1354,6 @@ if (current_os == "linux" || is_android) {
     jni_generator_include = "//sdk/android/src/jni/jni_generator_helper.h"
   }
 
-  generate_jni("generated_swcodecs_jni") {
-    sources = [
-      "api/org/webrtc/SoftwareVideoDecoderFactory.java",
-      "api/org/webrtc/SoftwareVideoEncoderFactory.java",
-    ]
-
-    namespace = "webrtc::jni"
-    jni_generator_include = "//sdk/android/src/jni/jni_generator_helper.h"
-  }
-
   generate_jni("generated_peerconnection_jni") {
     sources = [
       "api/org/webrtc/AddIceObserver.java",
@@ -1488,8 +1472,6 @@ if (is_android) {
         "instrumentationtests/src/org/webrtc/RtcCertificatePemTest.java",
         "instrumentationtests/src/org/webrtc/RtpSenderTest.java",
         "instrumentationtests/src/org/webrtc/RtpTransceiverTest.java",
-        "instrumentationtests/src/org/webrtc/SoftwareVideoDecoderFactoryTest.java",
-        "instrumentationtests/src/org/webrtc/SoftwareVideoEncoderFactoryTest.java",
         "instrumentationtests/src/org/webrtc/SurfaceTextureHelperTest.java",
         "instrumentationtests/src/org/webrtc/SurfaceViewRendererOnMeasureTest.java",
         "instrumentationtests/src/org/webrtc/TestConstants.java",
@@ -1551,7 +1533,7 @@ if (is_android) {
       ":libjingle_peerconnection_metrics_default_jni",
       ":native_api_jni",
       "../../pc:libjingle_peerconnection",
-      "../../rtc_base:ssl",
+      "../../rtc_base",
     ]
     output_extension = "so"
   }
@@ -1627,7 +1609,6 @@ if (is_android) {
       "../../api/task_queue:default_task_queue_factory",
       "../../api/video:video_frame",
       "../../api/video:video_rtp_headers",
-      "../../media:media_constants",
       "../../media:rtc_audio_video",
       "../../media:rtc_internal_video_codecs",
       "../../media:rtc_media_base",
@@ -1642,6 +1623,7 @@ if (is_android) {
       "../../rtc_base:logging",
       "../../rtc_base:macromagic",
       "../../rtc_base:platform_thread",
+      "../../rtc_base:rtc_base",
       "../../rtc_base:rtc_event",
       "../../rtc_base:stringutils",
       "../../rtc_base:threading",

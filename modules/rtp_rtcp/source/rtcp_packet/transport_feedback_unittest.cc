@@ -30,9 +30,6 @@ using ::testing::AllOf;
 using ::testing::Each;
 using ::testing::ElementsAreArray;
 using ::testing::Eq;
-using ::testing::InSequence;
-using ::testing::MockFunction;
-using ::testing::Ne;
 using ::testing::Property;
 using ::testing::SizeIs;
 
@@ -636,13 +633,13 @@ TEST(TransportFeedbackTest, ReportsMissingPackets) {
   feedback_builder.AddReceivedPacket(kBaseSeqNo + 3,
                                      kBaseTimestamp + TimeDelta::Millis(2));
 
-  MockFunction<void(uint16_t, TimeDelta)> handler;
-  InSequence s;
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 0, Ne(TimeDelta::PlusInfinity())));
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 1, TimeDelta::PlusInfinity()));
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 2, TimeDelta::PlusInfinity()));
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 3, Ne(TimeDelta::PlusInfinity())));
-  Parse(feedback_builder.Build()).ForAllPackets(handler.AsStdFunction());
+  EXPECT_THAT(
+      Parse(feedback_builder.Build()).GetAllPackets(),
+      ElementsAre(
+          Property(&TransportFeedback::ReceivedPacket::received, true),
+          Property(&TransportFeedback::ReceivedPacket::received, false),
+          Property(&TransportFeedback::ReceivedPacket::received, false),
+          Property(&TransportFeedback::ReceivedPacket::received, true)));
 }
 
 TEST(TransportFeedbackTest, ReportsMissingPacketsWithoutTimestamps) {
@@ -655,13 +652,13 @@ TEST(TransportFeedbackTest, ReportsMissingPacketsWithoutTimestamps) {
   // Packet losses indicated by jump in sequence number.
   feedback_builder.AddReceivedPacket(kBaseSeqNo + 3, Timestamp::Zero());
 
-  MockFunction<void(uint16_t, TimeDelta)> handler;
-  InSequence s;
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 0, Ne(TimeDelta::PlusInfinity())));
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 1, TimeDelta::PlusInfinity()));
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 2, TimeDelta::PlusInfinity()));
-  EXPECT_CALL(handler, Call(kBaseSeqNo + 3, Ne(TimeDelta::PlusInfinity())));
-  Parse(feedback_builder.Build()).ForAllPackets(handler.AsStdFunction());
+  EXPECT_THAT(
+      Parse(feedback_builder.Build()).GetAllPackets(),
+      ElementsAre(
+          Property(&TransportFeedback::ReceivedPacket::received, true),
+          Property(&TransportFeedback::ReceivedPacket::received, false),
+          Property(&TransportFeedback::ReceivedPacket::received, false),
+          Property(&TransportFeedback::ReceivedPacket::received, true)));
 }
 }  // namespace
 }  // namespace webrtc

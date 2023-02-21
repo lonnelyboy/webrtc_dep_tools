@@ -36,8 +36,6 @@ namespace webrtc {
 namespace {
 
 using ::testing::_;
-using ::testing::Eq;
-using ::testing::Property;
 
 constexpr uint8_t kFlexfecPlType = 118;
 constexpr uint8_t kFlexfecSsrc[] = {0x00, 0x00, 0x00, 0x01};
@@ -68,6 +66,8 @@ TEST(FlexfecReceiveStreamConfigTest, IsCompleteAndEnabled) {
 
   config.rtp.local_ssrc = 18374743;
   config.rtcp_mode = RtcpMode::kCompound;
+  config.rtp.transport_cc = true;
+  config.rtp.extensions.emplace_back(TransportSequenceNumber::Uri(), 7);
   EXPECT_FALSE(config.IsCompleteAndEnabled());
 
   config.payload_type = 123;
@@ -144,8 +144,7 @@ TEST_F(FlexfecReceiveStreamTest, RecoversPacket) {
   // clang-format on
 
   EXPECT_CALL(recovered_packet_receiver_,
-              OnRecoveredPacket(Property(&RtpPacketReceived::payload_size,
-                                         Eq(kPayloadLength[1]))));
+              OnRecoveredPacket(_, kRtpHeaderSize + kPayloadLength[1]));
 
   receive_stream_->OnRtpPacket(ParsePacket(kFlexfecPacket));
 

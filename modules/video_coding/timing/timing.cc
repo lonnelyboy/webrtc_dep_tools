@@ -13,7 +13,6 @@
 #include <algorithm>
 
 #include "api/units/time_delta.h"
-#include "modules/video_coding/timing/decode_time_percentile_filter.h"
 #include "modules/video_coding/timing/timestamp_extrapolator.h"
 #include "rtc_base/experiments/field_trial_parser.h"
 #include "rtc_base/logging.h"
@@ -48,7 +47,7 @@ VCMTiming::VCMTiming(Clock* clock, const FieldTrialsView& field_trials)
     : clock_(clock),
       ts_extrapolator_(
           std::make_unique<TimestampExtrapolator>(clock_->CurrentTime())),
-      decode_time_filter_(std::make_unique<DecodeTimePercentileFilter>()),
+      codec_timer_(std::make_unique<CodecTimer>()),
       render_delay_(kDefaultRenderDelay),
       min_playout_delay_(TimeDelta::Zero()),
       max_playout_delay_(TimeDelta::Seconds(10)),
@@ -66,7 +65,7 @@ VCMTiming::VCMTiming(Clock* clock, const FieldTrialsView& field_trials)
 void VCMTiming::Reset() {
   MutexLock lock(&mutex_);
   ts_extrapolator_->Reset(clock_->CurrentTime());
-  decode_time_filter_ = std::make_unique<DecodeTimePercentileFilter>();
+  codec_timer_ = std::make_unique<CodecTimer>();
   render_delay_ = kDefaultRenderDelay;
   min_playout_delay_ = TimeDelta::Zero();
   jitter_delay_ = TimeDelta::Zero();
@@ -172,7 +171,7 @@ void VCMTiming::UpdateCurrentDelay(Timestamp render_time,
 
 void VCMTiming::StopDecodeTimer(TimeDelta decode_time, Timestamp now) {
   MutexLock lock(&mutex_);
-  decode_time_filter_->AddTiming(decode_time.ms(), now.ms());
+  codec_timer_->AddTiming(decode_time.ms(), now.ms());
   RTC_DCHECK_GE(decode_time, TimeDelta::Zero());
   ++num_decoded_frames_;
 }
@@ -212,7 +211,7 @@ Timestamp VCMTiming::RenderTimeInternal(uint32_t frame_timestamp,
 }
 
 TimeDelta VCMTiming::RequiredDecodeTime() const {
-  const int decode_time_ms = decode_time_filter_->RequiredDecodeTimeMs();
+  const int decode_time_ms = codec_timer_->RequiredDecodeTimeMs();
   RTC_DCHECK_GE(decode_time_ms, 0);
   return TimeDelta::Millis(decode_time_ms);
 }

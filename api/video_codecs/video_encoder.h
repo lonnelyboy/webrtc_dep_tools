@@ -174,7 +174,7 @@ class RTC_EXPORT VideoEncoder {
     // For example: With I420, this value would be a multiple of 2.
     // Note that this field is unrelated to any horizontal or vertical stride
     // requirements the encoder has on the incoming video frame buffers.
-    uint32_t requested_resolution_alignment;
+    int requested_resolution_alignment;
 
     // Same as above but if true, each simulcast layer should also be divisible
     // by `requested_resolution_alignment`.
@@ -224,8 +224,8 @@ class RTC_EXPORT VideoEncoder {
     //
     // Spatial layers are treated independently, but temporal layers are
     // cumulative. For instance, if:
-    //   fps_allocation[0][0] = kMaxFramerateFraction / 2;
-    //   fps_allocation[0][1] = kMaxFramerateFraction;
+    //   fps_allocation[0][0] = kFullFramerate / 2;
+    //   fps_allocation[0][1] = kFullFramerate;
     // Then half of the frames are in the base layer and half is in TL1, but
     // since TL1 is assumed to depend on the base layer, the frame rate is
     // indicated as the full 100% for the top layer.
@@ -420,7 +420,7 @@ class RTC_EXPORT VideoEncoder {
   // The output of this method may change during runtime. For instance if a
   // hardware encoder fails, it may fall back to doing software encoding using
   // an implementation with different characteristics.
-  virtual EncoderInfo GetEncoderInfo() const = 0;
+  virtual EncoderInfo GetEncoderInfo() const;
 };
 }  // namespace webrtc
 #endif  // API_VIDEO_CODECS_VIDEO_ENCODER_H_

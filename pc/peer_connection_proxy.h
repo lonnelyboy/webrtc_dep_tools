@@ -35,11 +35,6 @@ PROXY_METHOD2(RTCErrorOr<rtc::scoped_refptr<RtpSenderInterface>>,
               AddTrack,
               rtc::scoped_refptr<MediaStreamTrackInterface>,
               const std::vector<std::string>&)
-PROXY_METHOD3(RTCErrorOr<rtc::scoped_refptr<RtpSenderInterface>>,
-              AddTrack,
-              rtc::scoped_refptr<MediaStreamTrackInterface>,
-              const std::vector<std::string>&,
-              const std::vector<RtpEncodingParameters>&)
 PROXY_METHOD1(RTCError,
               RemoveTrackOrError,
               rtc::scoped_refptr<RtpSenderInterface>)

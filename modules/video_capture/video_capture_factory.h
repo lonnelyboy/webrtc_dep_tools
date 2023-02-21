@@ -20,8 +20,6 @@
 
 namespace webrtc {
 
-class VideoCaptureOptions;
-
 class VideoCaptureFactory {
  public:
   // Create a video capture module object
@@ -30,13 +28,8 @@ class VideoCaptureFactory {
   //                      Available names can be found by using GetDeviceName
   static rtc::scoped_refptr<VideoCaptureModule> Create(
       const char* deviceUniqueIdUTF8);
-  static rtc::scoped_refptr<VideoCaptureModule> Create(
-      VideoCaptureOptions* options,
-      const char* deviceUniqueIdUTF8);
 
   static VideoCaptureModule::DeviceInfo* CreateDeviceInfo();
-  static VideoCaptureModule::DeviceInfo* CreateDeviceInfo(
-      VideoCaptureOptions* options);
 
  private:
   ~VideoCaptureFactory();

@@ -97,7 +97,6 @@ FlexfecReceiver::AddReceivedPacket(const RtpPacketReceived& packet) {
       new ForwardErrorCorrection::ReceivedPacket());
   received_packet->seq_num = packet.SequenceNumber();
   received_packet->ssrc = packet.Ssrc();
-  received_packet->extensions = packet.extension_manager();
   if (received_packet->ssrc == ssrc_) {
     // This is a FlexFEC packet.
     if (packet.payload_size() < kMinFlexfecHeaderSize) {
@@ -161,17 +160,13 @@ void FlexfecReceiver::ProcessReceivedPacket(
     // again, with the same packet.
     recovered_packet->returned = true;
     RTC_CHECK_GE(recovered_packet->pkt->data.size(), kRtpHeaderSize);
-
-    RtpPacketReceived parsed_packet(&received_packet.extensions);
-    if (!parsed_packet.Parse(recovered_packet->pkt->data)) {
-      continue;
-    }
-    parsed_packet.set_recovered(true);
-
-    // TODO(brandtr): Update here when we support protecting audio packets too.
-    parsed_packet.set_payload_type_frequency(kVideoPayloadTypeFrequency);
-    recovered_packet_receiver_->OnRecoveredPacket(parsed_packet);
-
+    recovered_packet_receiver_->OnRecoveredPacket(
+        recovered_packet->pkt->data.cdata(),
+        recovered_packet->pkt->data.size());
+    uint32_t media_ssrc =
+        ForwardErrorCorrection::ParseSsrc(recovered_packet->pkt->data.data());
+    uint16_t media_seq_num = ForwardErrorCorrection::ParseSequenceNumber(
+        recovered_packet->pkt->data.data());
     // Periodically log the incoming packets at LS_INFO.
     int64_t now_ms = clock_->TimeInMilliseconds();
     bool should_log_periodically =
@@ -179,9 +174,8 @@ void FlexfecReceiver::ProcessReceivedPacket(
     if (RTC_LOG_CHECK_LEVEL(LS_VERBOSE) || should_log_periodically) {
       rtc::LoggingSeverity level =
           should_log_periodically ? rtc::LS_INFO : rtc::LS_VERBOSE;
-      RTC_LOG_V(level) << "Recovered media packet with SSRC: "
-                       << parsed_packet.Ssrc() << " seq "
-                       << parsed_packet.SequenceNumber() << " recovered length "
+      RTC_LOG_V(level) << "Recovered media packet with SSRC: " << media_ssrc
+                       << " seq " << media_seq_num << " recovered length "
                        << recovered_packet->pkt->data.size()
                        << " from FlexFEC stream with SSRC: " << ssrc_;
       if (should_log_periodically) {

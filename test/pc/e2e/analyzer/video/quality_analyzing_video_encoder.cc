@@ -290,7 +290,6 @@ EncodedImageCallback::Result QualityAnalyzingVideoEncoder::OnEncodedImage(
   VideoQualityAnalyzerInterface::EncoderStats stats;
   stats.encoder_name = codec_name;
   stats.target_encode_bitrate = target_encode_bitrate;
-  stats.qp = encoded_image.qp_;
   analyzer_->OnFrameEncoded(peer_name_, frame_id, encoded_image, stats,
                             discard);
 
@@ -382,13 +381,6 @@ QualityAnalyzingVideoEncoderFactory::~QualityAnalyzingVideoEncoderFactory() =
 std::vector<SdpVideoFormat>
 QualityAnalyzingVideoEncoderFactory::GetSupportedFormats() const {
   return delegate_->GetSupportedFormats();
-}
-
-VideoEncoderFactory::CodecSupport
-QualityAnalyzingVideoEncoderFactory::QueryCodecSupport(
-    const SdpVideoFormat& format,
-    absl::optional<std::string> scalability_mode) const {
-  return delegate_->QueryCodecSupport(format, scalability_mode);
 }
 
 std::unique_ptr<VideoEncoder>

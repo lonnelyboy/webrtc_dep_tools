@@ -82,7 +82,6 @@ class DelayBasedBwe {
   DataRate TriggerOveruse(Timestamp at_time,
                           absl::optional<DataRate> link_capacity);
   DataRate last_estimate() const { return prev_bitrate_; }
-  BandwidthUsage last_state() const { return prev_state_; }
 
  private:
   friend class GoogCcStatePrinter;
